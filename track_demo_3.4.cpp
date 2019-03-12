@@ -1,5 +1,5 @@
 #include <opencv2/core/utility.hpp>
-#include <opencv2/tracking/tracking.hpp>
+//#include <opencv2/tracking/tracking.hpp>
 #include <opencv2/videoio.hpp>
 #include <opencv2/highgui.hpp>
 #include <iostream>
@@ -9,7 +9,7 @@ using namespace std;
 using namespace cv;
 
 int _main(int argc, char** argv) {
-	// 
+	//
 	int obj_n = 1;
 	string  names_file = "E:\\work_min\\data\\lidar\\lidar_data\\lidar_data\\names.list";
 	string  cfg_file = "E:\\work_min\\data\\lidar\\lidar_data\\lidar_data\\lidar.cfg";
@@ -21,7 +21,7 @@ int _main(int argc, char** argv) {
 
 	clock_t startTime, endTime;
 	// 初始化，创建
-	Ptr<TrackerMOSSE> tracker = TrackerMOSSE::create();
+	//Ptr<TrackerMOSSE> tracker = TrackerMOSSE::create();
 	Rect2d objects;
 
 
@@ -55,8 +55,8 @@ int _main(int argc, char** argv) {
 	objects.x = (double)obj_result_vec[0].x;
 	objects.y = (double)obj_result_vec[0].y;
 	//objects = selectROI("tracker", frame, false, false);
-	tracker->init(frame, objects);
-	//   !!!!! do 
+	//tracker->init(frame, objects);
+	//   !!!!! do
 	int count = 0;
 	bool first_frame = false;
 	double time_all = 0.0;
@@ -70,20 +70,20 @@ int _main(int argc, char** argv) {
 			continue;
 		}
 		if (first_frame)
-		{// 获取 目标框, 初始化 tracker	
+		{// 获取 目标框, 初始化 tracker
 			vector<bbox_t> obj_result_vec = detector.detect(frame);
-			objects.height = (double)obj_result_vec[0].h; 
+			objects.height = (double)obj_result_vec[0].h;
 			objects.width = (double)obj_result_vec[0].w;
-			objects.x = (double)obj_result_vec[0].x; 
+			objects.x = (double)obj_result_vec[0].x;
 			objects.y = (double)obj_result_vec[0].y;
 			//objects = selectROI("tracker", frame, false, false);
-			tracker->init(frame, objects);
+			//tracker->init(frame, objects);
 			first_frame = false;
 		}
 		else
 		{
 			startTime = clock();
-			tracker->update(frame, objects);
+			//tracker->update(frame, objects);
 			endTime = clock();
 			time_all += (double)(endTime - startTime) / CLOCKS_PER_SEC;
 			//画框

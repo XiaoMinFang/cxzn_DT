@@ -20,27 +20,12 @@
 #include "yolo_v2_class.hpp"    // imported functions from DLL
 #include <opencv2/opencv.hpp>            // C++
 #include <opencv2/core/version.hpp>
-#ifndef CV_VERSION_EPOCH
+
 #include <opencv2/videoio/videoio.hpp>
-#define OPENCV_VERSION CVAUX_STR(CV_VERSION_MAJOR)"" CVAUX_STR(CV_VERSION_MINOR)"" CVAUX_STR(CV_VERSION_REVISION)
-#ifndef USE_CMAKE_LIBS
-#pragma comment(lib, "opencv_world" OPENCV_VERSION ".lib")
-#ifdef TRACK_OPTFLOW
-#pragma comment(lib, "opencv_cudaoptflow" OPENCV_VERSION ".lib")
-#pragma comment(lib, "opencv_cudaimgproc" OPENCV_VERSION ".lib")
-#pragma comment(lib, "opencv_core" OPENCV_VERSION ".lib")
-#pragma comment(lib, "opencv_imgproc" OPENCV_VERSION ".lib")
-#pragma comment(lib, "opencv_highgui" OPENCV_VERSION ".lib")
-#endif    // TRACK_OPTFLOW
-#endif    // USE_CMAKE_LIBS
-#else
-#define OPENCV_VERSION CVAUX_STR(CV_VERSION_EPOCH)"" CVAUX_STR(CV_VERSION_MAJOR)"" CVAUX_STR(CV_VERSION_MINOR)
-#ifndef USE_CMAKE_LIBS
-#pragma comment(lib, "opencv_core" OPENCV_VERSION ".lib")
-#pragma comment(lib, "opencv_imgproc" OPENCV_VERSION ".lib")
-#pragma comment(lib, "opencv_highgui" OPENCV_VERSION ".lib")
-#endif    // USE_CMAKE_LIBS
-#endif    // CV_VERSION_EPOCH
+//#define OPENCV_VERSION CVAUX_STR(CV_VERSION_MAJOR)"" CVAUX_STR(CV_VERSION_MINOR)"" CVAUX_STR(CV_VERSION_REVISION)
+
+
+
 using namespace std;
 using namespace cv;
 
@@ -220,13 +205,13 @@ vector<string> objects_names_from_file(string const filename) {
 }
 
 
-int examples_main(int argc, char *argv[])
+int sample_main(int argc, char *argv[])
 {
-    string  names_file = "E:\\work_min\\data\\lidar\\lidar_data\\lidar_data\\names.list";
-    string  cfg_file = "E:\\work_min\\data\\lidar\\lidar_data\\lidar_data\\lidar_3c_tiny.cfg";
-    string  weights_file = "E:\\work_min\\data\\lidar\\lidar_model\\model_480_480_3c_tiny\\lidar_3c_tiny_78000.weights";
+    string  names_file = "/home/kid/min/lidar_dl/data/names.list";
+    string  cfg_file = "/home/kid/min/lidar_dl/data/model_480_480_tiny/lidar_tiny.cfg";
+    string  weights_file = "/home/kid/min/lidar_dl/data/model_480_480_tiny/lidar_tiny_final.weights";
     //string filename = "E:\\work_min\\data\\lidar\\lidar_data\\datas\\feature_3c_anno1\\feature_3c\\2\\1499.png";
-	string filename = "E:\\work_min\\1.avi";
+	string filename = "/home/kid/min/1.avi";
     float const thresh = 0.25;
 
     Detector_YOLO detector(cfg_file, weights_file);
