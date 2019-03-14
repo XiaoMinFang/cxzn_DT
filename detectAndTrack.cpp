@@ -41,6 +41,33 @@ struct res_track_t {
 	int l_tracking;                 //跟踪长度
 };
 
+void read_velo_data(string velofilename)
+{
+    int arr_counts[1] = {0};
+	int counts = 0;
+
+	string velo_filename = "/home/kid/min/Annotations/LiDar/anno3/veloseq/VLP160/1/648.bin";
+	ifstream fin(velo_filename, ios::binary);
+	if(!fin)
+	{
+		cout << "read "<<velofilename<<" error\n" <<endl;
+	}
+	fin.read((char*)arr_counts,sizeof(int));
+	if (arr_counts[0] != 0) counts = arr_counts[0];
+
+	cout<<counts<<endl;
+
+	float x[counts];float y[counts];
+	float z[counts];float r[counts];
+
+	fin.read((char*)x,counts*sizeof(float));
+	fin.read((char*)y,counts*sizeof(float));
+	fin.read((char*)z,counts*sizeof(float));
+	fin.read((char*)r,counts*sizeof(float));
+
+	fin.close();
+
+}
 
 
 //初始化tracking
@@ -166,7 +193,7 @@ vector<string> get_objNames_fromFile(string const filename) {
 }
 
 
-int main(int argc, char** argv[])
+int test_main(int argc, char** argv[])
 {
 	int n_interval = 10;//间隔几帧，进行检测，更新tracking结果
 
