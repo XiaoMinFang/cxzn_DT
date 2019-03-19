@@ -27,7 +27,7 @@
 
 #include <opencv2/opencv.hpp>
 
-
+//#define OVERLOP_NUM 3
 ////点云边
 #define MINX -10.0
 #define MAXX 50.0
@@ -36,9 +36,32 @@
 #define MINZ -1.6
 #define MAXZ 2.4
 
+#define GROUND_LIMIT_MIN 0.5
+#define GROUND_LIMIT_MAX 5
+#define OVERLOP_NUM 3
 
 
-void load_data(cv::Mat& img_src,std::string velo_filename160,std::string velo_filename161);
+struct velo_data_t {
+    int counts;
+	float *x;
+	float *y;
+	float *z;
+	int *r;
+};
+class LOAD_LIDAR_DATA{
+    std::vector<velo_data_t> points_velo_list;
+};
+
+
+
+void get_img(cv::Mat& img_src,velo_data_t velo_points);
+
+velo_data_t load_data(std::string velo_filename160,std::string velo_filename161);
+
+pcl::PointCloud<pcl::PointXYZI>::Ptr passthrough_filter(pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_velo);
+
+
+int lidar_process(velo_data_t velo_points);
 
 
 #endif // LOAD_DATA_HPP

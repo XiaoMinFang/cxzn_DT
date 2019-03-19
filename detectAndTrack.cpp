@@ -313,7 +313,7 @@ int video_main()
 }
 
 
-int main()
+int pcl_main()
 {
 	int n_interval = 10;//间隔几帧，进行检测，更新tracking结果
 
@@ -339,7 +339,10 @@ int main()
     string velo_160 = velo_path_160+to_string(s_id) + bin_s;
     string velo_161 = velo_path_161+to_string(s_id) + bin_s;
     cout<< velo_160<<","<<velo_161<<endl;
-    load_data(mat_img,velo_160,velo_161);
+    velo_data_t velo_points;
+    velo_points = load_data(velo_path_160,velo_path_161);
+
+    get_img(mat_img,velo_points);
     if (mat_img.rows == 0 || mat_img.cols == 0) return (0);
     cv::imshow("img",mat_img);
     cv::waitKey(0);
@@ -358,7 +361,8 @@ int main()
         string bin_s = ".bin";
         string velo_160 = velo_path_160+to_string(i) + bin_s;
         string velo_161 = velo_path_161+to_string(i) + bin_s;
-        load_data(mat_img,velo_160,velo_161);
+        velo_points = load_data(velo_path_160,velo_path_161);
+        get_img(mat_img,velo_points);
         cv::imshow("img",mat_img);
         cv::waitKey(0);
 

@@ -307,33 +307,60 @@ using namespace cv;
 //
 //}
 
-int creat_pcd()
+int test_vector_main()
 {
-//    pcl::PointCloud<pcl::PointXYZ> cloud;
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
+    int OVERLAP_FRAME_COUNT = 3;
+    vector<pcl::PointCloud<pcl::PointXYZ>> points_velo_list(OVERLAP_FRAME_COUNT);
+
+
+    pcl::PointCloud<pcl::PointXYZ> cloud;
+    //pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
 
     // 创建点云  并设置适当的参数（width height is_dense）
-    cloud->width    = 50000;
-    cloud->height   = 1;
-    cloud->is_dense = true;  //不是稠密型的
-    cloud->points.resize (cloud->width * cloud->height);  //点云总数大小
+    cloud.width = 50;
+    cloud.height = 1;
+    cloud.points.resize(cloud.width*cloud.height);
+//    cloud->width    = 50000;
+//    cloud->height   = 1;
+//    cloud->is_dense = true;  //不是稠密型的
+//    cloud->points.resize (cloud->width * cloud->height);  //点云总数大小
     //cloud.points.resize (100);  //点云总数大小
     //用随机数的值填充PointCloud点云对象
-    //for (size_t i = 0; i < cloud.points.size (); ++i)
-    for (size_t i = 0; i < 50000; ++i)
+
+    for (int k=0;k<OVERLAP_FRAME_COUNT;k++)
     {
-        cloud->points[i].x = 1024 * rand () / (RAND_MAX + 1.0f);
-        cloud->points[i].y = 1024 * rand () / (RAND_MAX + 1.0f);
-        cloud->points[i].z = 1024 * rand () / (RAND_MAX + 1.0f);
+        for (int i = 0; i < cloud.points.size (); ++i)
+        //for (size_t i = 0; i < 50000; ++i)
+        {
+    //        cloud->points[i].x = 1024 * rand () / (RAND_MAX + 1.0f);
+    //        cloud->points[i].y = 1024 * rand () / (RAND_MAX + 1.0f);
+    //        cloud->points[i].z = 1024 * rand () / (RAND_MAX + 1.0f);
+            cloud.points[i].x = 1024 * rand () / (RAND_MAX + 1.0f);
+            cloud.points[i].y = 1024 * rand () / (RAND_MAX + 1.0f);
+            cloud.points[i].z = 1024 * rand () / (RAND_MAX + 1.0f);
+        }
+        //把PointCloud对象数据存储在points_velo_list中
+        points_velo_list.push_back(cloud);
     }
+
+
+
+
     //把PointCloud对象数据存储在 test_pcd.pcd文件中
-    pcl::io::savePCDFileASCII ("test_pcd.pcd", *cloud);
-
+    //pcl::io::savePCDFileASCII ("test_pcd.pcd", *cloud);
+    pcl::PointCloud<pcl::PointXYZ> cloud_tmp;
     //打印输出存储的点云数据
-    std::cerr << "Saved " << cloud->points.size () << " data points to test_pcd.pcd." << std::endl;
+    for (int k=0;k<OVERLAP_FRAME_COUNT;k++)
+    {
+        cloud_tmp = points_velo_list[k];
+        std::cerr << "Saved " << cloud_tmp.points.size () << " data points to test_pcd.pcd." << std::endl;
 
-    for (size_t i = 0; i < cloud->points.size (); ++i)
-    std::cerr << ">>" << cloud->points[i].x << "," << cloud->points[i].y << "," << cloud->points[i].z << std::endl;
+        for (size_t i = 0; i < cloud_tmp.points.size (); ++i)
+        std::cerr << ">>" << cloud_tmp.points[i].x << "," << cloud_tmp.points[i].y << "," << cloud_tmp.points[i].z << std::endl;
+    }
+
+
+
 
     return (1);
 }
@@ -350,7 +377,7 @@ string&   replace_all(string&   str,const   string&   old_value,const   string& 
 }
 
 
-int test_read_main()
+int main()
 {
     //
 //    float array1[] = { 1, 4, 6, 7, 9, 12 };
@@ -375,27 +402,31 @@ int test_read_main()
 	string save_path_tmp1,save_path_tmp2,save_path;
 
 
-	//while(!fin160.eof() && !fin161.eof())
-    for(int i = 0;i<3;i++)
+	while(!fin160.eof() && !fin161.eof())
+    //for(int i = 0;i<3;i++)
     {
         getline(fin160,velo_path_160);
         cout<<velo_path_160<<endl;
         getline(fin161,velo_path_161);
         cout<<velo_path_161<<endl;
 
-        load_data(img,velo_path_160,velo_path_161);
-        cv::imshow("img",img);
-        cv::waitKey(0);
+        velo_data_t velo_points;
+        velo_points = load_data(velo_path_160,velo_path_161);
 
-//        save_path_tmp1 = replace_all(velo_path_161,"veloseq","img_cpp_1c");
-//        save_path_tmp2 = replace_all(save_path_tmp1,"VLP161/","");
-//        save_path = replace_all(save_path_tmp2,".bin",".png");
+        get_img(img,velo_points);
+//        cv::imshow("img",img);
+//        cv::waitKey(0);
+
+        save_path_tmp1 = replace_all(velo_path_161,"veloseq","img_cpp_3c");
+        save_path_tmp2 = replace_all(save_path_tmp1,"VLP161/","");
+        save_path = replace_all(save_path_tmp2,".bin",".png");
 //
 //        cout<< save_path<<endl;
-//        imwrite(save_path,img);
+        imwrite(save_path,img);
         counts++;
     }
-    fin160.close()
+    fin160.close();
+    fin161.close();
 
 
 //	string save_path = "/home/kid/min/Annotations/LiDar/anno3/";
