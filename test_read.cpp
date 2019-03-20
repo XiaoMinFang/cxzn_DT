@@ -3,6 +3,7 @@
 #include<fstream>
 #include<string>
 #include<cmath>
+#include<ctime>
 
 #include <opencv2/opencv.hpp>            // C++
 
@@ -393,27 +394,57 @@ int main()
 
 //	int sucess = creat_pcd();
     Mat img;
-    ifstream fin160("/home/kid/min/Annotations/LiDar/anno3/vlp160.txt", ios::in);
-    ifstream fin161("/home/kid/min/Annotations/LiDar/anno3/vlp161.txt", ios::in);
+    ifstream fin160("/home/kid/min/Annotations/LiDar/anno2/vlp160.txt", ios::in);
+    ifstream fin161("/home/kid/min/Annotations/LiDar/anno2/vlp161.txt", ios::in);
     string velo_path_160;
 	string velo_path_161;
+	string imu_path;
 	int counts=0;
-
 	string save_path_tmp1,save_path_tmp2,save_path;
 
+    velo_data_t velo_point;
+    imu_data_t imu_data;
+    vector<velo_data_t> velo_points;
+    vector<imu_data_t> imu_datas;
 
-	while(!fin160.eof() && !fin161.eof())
-    //for(int i = 0;i<3;i++)
+
+	//while(!fin160.eof() && !fin161.eof())
+	clock_t startTime,endTime;
+    for(int i = 0;i<6;i++)
     {
         getline(fin160,velo_path_160);
         cout<<velo_path_160<<endl;
         getline(fin161,velo_path_161);
         cout<<velo_path_161<<endl;
 
-        velo_data_t velo_points;
-        velo_points = load_data(velo_path_160,velo_path_161);
+        velo_point = read_velo_data(velo_path_160,velo_path_161);
+        velo_points.push_back(velo_point);
 
-        get_img(img,velo_points);
+        imu_path = replace_all(velo_path_161,"veloseq","imuseq");
+        imu_path = replace_all(imu_path,"VLP161/","");
+        imu_path = replace_all(imu_path,".bin",".txt");
+        cout<<imu_path<<endl;
+        imu_data = read_imu_data(imu_path);
+        imu_datas.push_back(imu_data);
+        if(velo_points.size()>=OVERLOP_NUM)
+        {
+            pcl::PointCloud<pcl::PointXYZI>::Ptr pc(new pcl::PointCloud<pcl::PointXYZI>);
+            startTime = clock();//计时开始
+            pc = process_merged(velo_points,imu_datas);
+            endTime = clock();
+            cout << "process_merged run time is: " <<(double)(endTime - startTime) / CLOCKS_PER_SEC << "s" << endl;
+            startTime = clock();//计时开始
+            get_img(img,pc);
+            endTime = clock();
+            cout << "get_img run time is: " <<(double)(endTime - startTime) / CLOCKS_PER_SEC << "s" << endl;
+            cv::imshow("img",img);
+            cv::waitKey(0);
+            imu_datas.clear();
+            velo_points.clear();
+        }else{continue;}
+
+
+        //get_img(img,velo_points);
 //        cv::imshow("img",img);
 //        cv::waitKey(0);
 
@@ -422,7 +453,7 @@ int main()
         save_path = replace_all(save_path_tmp2,".bin",".png");
 //
 //        cout<< save_path<<endl;
-        imwrite(save_path,img);
+        //imwrite(save_path,img);
         counts++;
     }
     fin160.close();
@@ -446,3 +477,28 @@ int main()
 	return (1);
 }
 
+int imu_main()
+{
+    projPJ pj_merc, pj_latlong;
+    double x, y;
+
+	if (!(pj_merc = pj_init_plus("+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs")))
+		exit(1);
+	if (!(pj_latlong = pj_init_plus("+proj=longlat +datum=WGS84 +no_defs")))
+		exit(1);
+
+	x = -9.866554;
+	y = 7.454779;
+
+	x *= DEG_TO_RAD;
+	y *= DEG_TO_RAD;
+
+	pj_transform(pj_latlong, pj_merc, 1, 1, &x, &y, NULL);
+
+	x /= DEG_TO_RAD;
+	y /= DEG_TO_RAD;
+
+	std::cout << "(" << x << " , " << y << ")" << std::endl;
+
+
+}

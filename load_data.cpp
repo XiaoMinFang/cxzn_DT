@@ -3,6 +3,9 @@
 using namespace std;
 using namespace cv;
 
+
+imu_origin_t imu_origin;
+
 std::vector<float> normalize_0_255(vector<float> datas,float dMinValue,float dMaxValue)
 {
     int length;
@@ -50,7 +53,7 @@ float *SortArry(float *StrA,int lenA, float *StrB, int lenB)
 }
 
 
-pcl::PointCloud<pcl::PointXYZI>::Ptr passthrough_filter(pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_velo)
+pcl::PointCloud<pcl::PointXYZI>::Ptr passthrough_filter(pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_velo,bool is_gro)
 {
     pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZI>);
     pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered_x(new pcl::PointCloud<pcl::PointXYZI>);
@@ -70,23 +73,20 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr passthrough_filter(pcl::PointCloud<pcl::Poi
     pass.setFilterLimits(MINY,MAXY);
     pass.filter(*cloud_filtered_y);
 
-    pass.setInputCloud(cloud_filtered_y);
-    pass.setFilterFieldName("z");
-    pass.setFilterLimits(GROUND_LIMIT_MIN,GROUND_LIMIT_MAX);
-    //pass.setFilterLimitsNegative (true);
-    pass.filter(*cloud_filtered);
+    if (is_gro == true)
+    {
+        pass.setInputCloud(cloud_filtered_y);
+        pass.setFilterFieldName("z");
+        pass.setFilterLimits(GROUND_LIMIT_MIN,GROUND_LIMIT_MAX);
+        pass.filter(*cloud_filtered);
+        return cloud_filtered;
 
-    //	for (int i = 0; i < cloud_filtered->points.size(); ++i)
-    //    {
-    //        std::cerr << ">>>>>
-    //    }
-    //    cerr<<">>>>>>>>>>"<<cloud_filtered->points.size()<<"\n"<<endl;
-
-
-    return cloud_filtered;
+    }else{
+        return cloud_filtered_y;
+    }
 }
 
-velo_data_t load_data(string velo_filename160,string velo_filename161)
+velo_data_t read_velo_data(string velo_filename160,string velo_filename161)
 {
     int arr_counts[1] = {0};
     int counts160 = 0, counts161 = 0, counts = 0;
@@ -157,185 +157,29 @@ velo_data_t load_data(string velo_filename160,string velo_filename161)
 
 }
 
-
-void get_img(cv::Mat& img_src,velo_data_t velo_points)
+imu_data_t read_imu_data(string imu_filename)
 {
-    int user_data = 0;
-
-//	string velo_filename160 = "/home/kid/min/Annotations/LiDar/anno2/veloseq/1/VLP160/324.bin";
-//	string velo_filename161 = "/home/kid/min/Annotations/LiDar/anno2/veloseq/1/VLP161/324.bin";
-
-    pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_velo(new pcl::PointCloud<pcl::PointXYZI>);
-
-    //point_cloud_velo->width    = 5182;
-    point_cloud_velo->width    = velo_points.counts;
-    point_cloud_velo->height   = 1;
-    point_cloud_velo->is_dense = false;  //不是稠密型的
-    point_cloud_velo->points.resize(point_cloud_velo->width*point_cloud_velo->height);
-
-    for (int i=0;i < velo_points.counts;i++ )
+    ifstream fin(imu_filename, ios::in);
+    double lat,lon,direction,v,rtk;
+    imu_data_t imu_datas;
+    while(!fin.eof())
     {
-        point_cloud_velo->points[i].x = velo_points.y[i];
-        point_cloud_velo->points[i].y = velo_points.x[i];
-//            point_cloud_velo->points[i].z = zz[i]-MINZ;
-        point_cloud_velo->points[i].z = velo_points.z[i];
-        point_cloud_velo->points[i].intensity = velo_points.r[i];
+        fin>>lat>>lon>>direction>>v>>rtk;
+        imu_datas.lat = lat;
+        imu_datas.lon = lon;
+        imu_datas.direction = direction;
     }
-
-
-//    for (int i = 0; i < point_cloud_velo->points.size(); ++i)
-//    {
-//        std::cerr << ">>>>>" << xx[i]<<"<->"<<point_cloud_velo->points[i].x << "," <<yy[i]<<"<->"<< point_cloud_velo->points[i].y << "," << xx[i]<<"<->"<< point_cloud_velo->points[i].z << std::endl;
-//    }
-//    for (int i = 0; i < point_cloud_velo->points.size(); ++i)
-//    {
-//        std::cerr << ">>>>>" << rr[i]<<"<->"<<point_cloud_velo->points[i].intensity<<std::endl;
-//    }
-
-    // ********************
-
-
-
-    //地面滤出＋边界滤出
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZI>);
-    cloud_filtered = passthrough_filter(point_cloud_velo);
-
-
-
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_d(new pcl::PointCloud<pcl::PointXYZ>);
-
-//    pcl::copyPointCloud(*cloud_d, *cloud_filtered);
-    cout<<"remain points = "<<cloud_filtered->points.size()<<endl;
-
-    vector<float>densityMap,nol_densityMap;
-    int M = cloud_filtered->points.size();
-    for (int i = 0;i <M;i++)
-    {
-        pcl::PointXYZ p;
-        p.x = cloud_filtered->points[i].x*100.0;
-        p.y = cloud_filtered->points[i].y*100.0;
-        p.z = cloud_filtered->points[i].z*100.0;
-        cloud_d->points.push_back(p);
-    }
-    cloud_d->width = 1;
-    cloud_d->height = M;
-    //cout<<">>>"<<cloud_d->points.size()<<endl;
-    pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;  //创建一个快速k近邻查询,查询的时候若该点在点云中，则第一个近邻点是其本身
-    kdtree.setInputCloud(cloud_d);
-    float everagedistance =0;
-    for (int i =0; i < cloud_d->size();i++)
-    {
-        //cout<<">>>>> i = "<<i<<endl;
-        vector<int> nnh ;
-        vector<float> squaredistance;
-        pcl::PointXYZ p;
-        p = cloud_d->points[i];
-        kdtree.radiusSearch(p,1,nnh,squaredistance);
-        int tmp = nnh.size() ;
-        //if (tmp > 1) cout<<"i = "<<i<<", density = "<<tmp<<"\n"<<endl;
-
-        if (tmp > 1)
-        {
-            float tmp_ = min(1.0,log((float)tmp)/log(64));
-            densityMap.push_back(tmp_);
-        }
-        else densityMap.push_back(0.0);
-    }
-
-    //everagedistance = everagedistance/(cloud->size()/2);
-
-
-    //*********************
-    //# 转换为像素位置的值 - 基于分辨率
-    int res = 480;
-    float xp = (MAXY-MINY) / (float)res;
-    float yp = (MAXX-MINX) / (float)res;
-    cout<<"xp = "<<xp<<" , yp = "<<yp<<"\n"<<endl;
-    int size_cloud_filtered = cloud_filtered->points.size();
-    int ximg[size_cloud_filtered] = {0};
-    int yimg[size_cloud_filtered] = {0};
-    vector<float> z_points(size_cloud_filtered),nol_z_points;
-    vector<float> intensityMap(size_cloud_filtered),nol_intensityMap;
-    //vector<float> z_points(cloud_filtered->points.z);
-
-
-    int px,py;//用来指向图像位置
-    for(int j=0;j<size_cloud_filtered;j++)
-    {
-        ximg[j] = (int)((cloud_filtered->points[j].y - MINY)/ yp);
-        yimg[j] = res-1-(int)((cloud_filtered->points[j].x - MINX)/ xp);
-        px = ximg[j];
-        py = yimg[j];
-        if(px>=res||py>=res||px<0||py<0)
-        {
-            cout<<">> cloud_filtered->points[j].y="<<cloud_filtered->points[j].y<<", cloud_filtered->points[j].x="<<cloud_filtered->points[j].x<<"\n"<<endl;
-            cout<<">> px="<<px<<", py="<<py<<"\n"<<endl;
-        }
-//        ximg[j] = (int)((cloud_filtered->points[j].y)/ yp);
-//        yimg[j] = (int)((cloud_filtered->points[j].x)/ xp);
-        z_points.push_back(cloud_filtered->points[j].z);
-        intensityMap.push_back(cloud_filtered->points[j].intensity);
-    }
-    nol_z_points = normalize_0_255(z_points,MINZ,MAXZ);
-    float d_min = *min_element(intensityMap.begin(), intensityMap.end());
-    float d_max = *max_element(intensityMap.begin(), intensityMap.end());
-    nol_intensityMap = normalize_0_255(intensityMap,0,d_max);
-    d_min = *min_element(densityMap.begin(), densityMap.end());
-    d_max = *max_element(densityMap.begin(), densityMap.end());
-    nol_densityMap = normalize_0_255(densityMap,0,d_max);
-    //float density_max = *max_element(densityMap.begin(), densityMap.end());
-    Mat img(res, res, CV_8UC3,Scalar(0,0,0));  //
-    //img(res, res, CV_8UC3,Scalar(0,0,0));
-    for (int i=0;i<size_cloud_filtered;i++)
-    {
-        px = ximg[i];
-        py = yimg[i];
-        if(px>=res||py>=res||px<0||py<0)
-        {
-            cout<<">> px="<<px<<", py="<<py<<"\n"<<endl;
-        }else //BGR
-        {
-            //img.at<Vec3b>(py,px)[0] = nol_densityMap[i];
-            img.at<Vec3b>(py,px)[0] = 0;
-            img.at<Vec3b>(py,px)[1] = nol_z_points[i];
-            //img.at<Vec3b>(py,px)[2] = nol_intensityMap[i];
-            img.at<Vec3b>(py,px)[2] = 0;
-            //img.at<uchar>(py,px) = nol_z_points[i];
-        }
-
-    }
-
-
-
-
-//    boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer("3D Viewer"));
-//	viewer->setBackgroundColor(0, 0, 0);
-//	viewer->addPointCloud<pcl::PointXYZI>(point_cloud_velo, "sample cloud");
-//	//viewer->addPointCloud<pcl::PointXYZ>(cloud_filtered, "sample cloud");
-//	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "sample cloud");
-//	viewer->addCoordinateSystem(1.0);
-//	viewer->initCameraParameters();
-//
-//	while (!viewer->wasStopped())
-//	{
-//		viewer->spinOnce(100);
-//		boost::this_thread::sleep(boost::posix_time::microseconds(100000));
-//	}
-
-    img_src = img;
-        //return (1);
-
+    return imu_datas;
 }
-
-//int lidar_process(velo_data_t velo_points)
+//void get_img(cv::Mat& img_src,velo_data_t velo_points)
 //{
-////    points_velo_list.push_back(velo_points);
-////    if (points_velo_list.size() < OVERLOP_NUM)
-////        return (0);
+//    int user_data = 0;
 //
-//
+////	string velo_filename160 = "/home/kid/min/Annotations/LiDar/anno2/veloseq/1/VLP160/324.bin";
+////	string velo_filename161 = "/home/kid/min/Annotations/LiDar/anno2/veloseq/1/VLP161/324.bin";
 //
 //    pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_velo(new pcl::PointCloud<pcl::PointXYZI>);
+//
 //    //point_cloud_velo->width    = 5182;
 //    point_cloud_velo->width    = velo_points.counts;
 //    point_cloud_velo->height   = 1;
@@ -352,12 +196,390 @@ void get_img(cv::Mat& img_src,velo_data_t velo_points)
 //    }
 //
 //
+////    for (int i = 0; i < point_cloud_velo->points.size(); ++i)
+////    {
+////        std::cerr << ">>>>>" << xx[i]<<"<->"<<point_cloud_velo->points[i].x << "," <<yy[i]<<"<->"<< point_cloud_velo->points[i].y << "," << xx[i]<<"<->"<< point_cloud_velo->points[i].z << std::endl;
+////    }
+////    for (int i = 0; i < point_cloud_velo->points.size(); ++i)
+////    {
+////        std::cerr << ">>>>>" << rr[i]<<"<->"<<point_cloud_velo->points[i].intensity<<std::endl;
+////    }
+//
+//    // ********************
+//
+//
+//
+//    //地面滤出＋边界滤出
+//    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZI>);
+//    cloud_filtered = passthrough_filter(point_cloud_velo);
+//
+//
+//
+//    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_d(new pcl::PointCloud<pcl::PointXYZ>);
+//
+////    pcl::copyPointCloud(*cloud_d, *cloud_filtered);
+//    cout<<"remain points = "<<cloud_filtered->points.size()<<endl;
+//
+//    vector<float>densityMap,nol_densityMap;
+//    int M = cloud_filtered->points.size();
+//    for (int i = 0;i <M;i++)
+//    {
+//        pcl::PointXYZ p;
+//        p.x = cloud_filtered->points[i].x*100.0;
+//        p.y = cloud_filtered->points[i].y*100.0;
+//        p.z = cloud_filtered->points[i].z*100.0;
+//        cloud_d->points.push_back(p);
+//    }
+//    cloud_d->width = 1;
+//    cloud_d->height = M;
+//    //cout<<">>>"<<cloud_d->points.size()<<endl;
+//    pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;  //创建一个快速k近邻查询,查询的时候若该点在点云中，则第一个近邻点是其本身
+//    kdtree.setInputCloud(cloud_d);
+//    float everagedistance =0;
+//    for (int i =0; i < cloud_d->size();i++)
+//    {
+//        //cout<<">>>>> i = "<<i<<endl;
+//        vector<int> nnh ;
+//        vector<float> squaredistance;
+//        pcl::PointXYZ p;
+//        p = cloud_d->points[i];
+//        kdtree.radiusSearch(p,1,nnh,squaredistance);
+//        int tmp = nnh.size() ;
+//        //if (tmp > 1) cout<<"i = "<<i<<", density = "<<tmp<<"\n"<<endl;
+//
+//        if (tmp > 1)
+//        {
+//            float tmp_ = min(1.0,log((float)tmp)/log(64));
+//            densityMap.push_back(tmp_);
+//        }
+//        else densityMap.push_back(0.0);
+//    }
+//
+//    //everagedistance = everagedistance/(cloud->size()/2);
+//
+//
+//    //*********************
+//    //# 转换为像素位置的值 - 基于分辨率
+//    int res = 480;
+//    float xp = (MAXY-MINY) / (float)res;
+//    float yp = (MAXX-MINX) / (float)res;
+//    cout<<"xp = "<<xp<<" , yp = "<<yp<<"\n"<<endl;
+//    int size_cloud_filtered = cloud_filtered->points.size();
+//    int ximg[size_cloud_filtered] = {0};
+//    int yimg[size_cloud_filtered] = {0};
+//    vector<float> z_points(size_cloud_filtered),nol_z_points;
+//    vector<float> intensityMap(size_cloud_filtered),nol_intensityMap;
+//    //vector<float> z_points(cloud_filtered->points.z);
+//
+//
+//    int px,py;//用来指向图像位置
+//    for(int j=0;j<size_cloud_filtered;j++)
+//    {
+//        ximg[j] = (int)((cloud_filtered->points[j].y - MINY)/ yp);
+//        yimg[j] = res-1-(int)((cloud_filtered->points[j].x - MINX)/ xp);
+//        px = ximg[j];
+//        py = yimg[j];
+//        if(px>=res||py>=res||px<0||py<0)
+//        {
+//            cout<<">> cloud_filtered->points[j].y="<<cloud_filtered->points[j].y<<", cloud_filtered->points[j].x="<<cloud_filtered->points[j].x<<"\n"<<endl;
+//            cout<<">> px="<<px<<", py="<<py<<"\n"<<endl;
+//        }
+////        ximg[j] = (int)((cloud_filtered->points[j].y)/ yp);
+////        yimg[j] = (int)((cloud_filtered->points[j].x)/ xp);
+//        z_points.push_back(cloud_filtered->points[j].z);
+//        intensityMap.push_back(cloud_filtered->points[j].intensity);
+//    }
+//    nol_z_points = normalize_0_255(z_points,MINZ,MAXZ);
+//    float d_min = *min_element(intensityMap.begin(), intensityMap.end());
+//    float d_max = *max_element(intensityMap.begin(), intensityMap.end());
+//    nol_intensityMap = normalize_0_255(intensityMap,0,d_max);
+//    d_min = *min_element(densityMap.begin(), densityMap.end());
+//    d_max = *max_element(densityMap.begin(), densityMap.end());
+//    nol_densityMap = normalize_0_255(densityMap,0,d_max);
+//    //float density_max = *max_element(densityMap.begin(), densityMap.end());
+//    Mat img(res, res, CV_8UC3,Scalar(0,0,0));  //
+//    //img(res, res, CV_8UC3,Scalar(0,0,0));
+//    for (int i=0;i<size_cloud_filtered;i++)
+//    {
+//        px = ximg[i];
+//        py = yimg[i];
+//        if(px>=res||py>=res||px<0||py<0)
+//        {
+//            cout<<">> px="<<px<<", py="<<py<<"\n"<<endl;
+//        }else //BGR
+//        {
+//            //img.at<Vec3b>(py,px)[0] = nol_densityMap[i];
+//            img.at<Vec3b>(py,px)[0] = 0;
+//            img.at<Vec3b>(py,px)[1] = nol_z_points[i];
+//            //img.at<Vec3b>(py,px)[2] = nol_intensityMap[i];
+//            img.at<Vec3b>(py,px)[2] = 0;
+//            //img.at<uchar>(py,px) = nol_z_points[i];
+//        }
+//
+//    }
 //
 //
 //
 //
+////    boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer("3D Viewer"));
+////	viewer->setBackgroundColor(0, 0, 0);
+////	viewer->addPointCloud<pcl::PointXYZI>(point_cloud_velo, "sample cloud");
+////	//viewer->addPointCloud<pcl::PointXYZ>(cloud_filtered, "sample cloud");
+////	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "sample cloud");
+////	viewer->addCoordinateSystem(1.0);
+////	viewer->initCameraParameters();
+////
+////	while (!viewer->wasStopped())
+////	{
+////		viewer->spinOnce(100);
+////		boost::this_thread::sleep(boost::posix_time::microseconds(100000));
+////	}
 //
-//
+//    img_src = img;
+//        //return (1);
 //
 //}
 //
+void get_img(cv::Mat& img_src,pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_velo)
+{
+
+    int size_cloud = point_cloud_velo->points.size();
+
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_d(new pcl::PointCloud<pcl::PointXYZ>);
+
+    vector<float>densityMap,nol_densityMap;
+
+//    for (int i = 0;i < size_cloud;i++)
+//    {
+//        pcl::PointXYZ p;
+//        p.x = point_cloud_velo->points[i].x*100.0;
+//        p.y = point_cloud_velo->points[i].y*100.0;
+//        p.z = point_cloud_velo->points[i].z*100.0;
+//        cloud_d->points.push_back(p);
+//    }
+//    cloud_d->width = 1;
+//    cloud_d->height = size_cloud;
+    pcl::copyPointCloud(*point_cloud_velo,*cloud_d);
+    //cout<<">>>"<<cloud_d->points.size()<<endl;
+    pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;  //创建一个快速k近邻查询,查询的时候若该点在点云中，则第一个近邻点是其本身
+    kdtree.setInputCloud(cloud_d);
+    float everagedistance =0;
+    for (int i =0; i < cloud_d->size();i++)
+    {
+        //cout<<">>>>> i = "<<i<<endl;
+        vector<int> nnh ;
+        vector<float> squaredistance;
+        pcl::PointXYZ p;
+        p = cloud_d->points[i];
+        kdtree.radiusSearch(p,0.1,nnh,squaredistance);
+        int tmp = nnh.size() ;
+        //if (tmp > 1) cout<<"i = "<<i<<", density = "<<tmp<<"\n"<<endl;
+
+        if (tmp > 1)
+        {
+            float tmp_ = min(1.0,log((float)tmp)/log(64));
+            densityMap.push_back(tmp_);
+        }
+        else densityMap.push_back(0.0);
+    }
+
+
+    //*********************
+    //# 转换为像素位置的值 - 基于分辨率
+    int res = 480;
+    float xp = (MAXY-MINY) / (float)res;
+    float yp = (MAXX-MINX) / (float)res;
+    cout<<"xp = "<<xp<<" , yp = "<<yp<<"\n"<<endl;
+
+    int ximg[size_cloud] = {0};
+    int yimg[size_cloud] = {0};
+    vector<float> z_points(size_cloud),nol_z_points;
+    vector<float> intensityMap(size_cloud),nol_intensityMap;
+    //vector<float> z_points(cloud_filtered->points.z);
+
+
+    int px,py;//用来指向图像位置
+    for(int j=0;j<size_cloud;j++)
+    {
+        ximg[j] = (int)((point_cloud_velo->points[j].y - MINY)/ yp);
+        yimg[j] = res-1-(int)((point_cloud_velo->points[j].x - MINX)/ xp);
+//        px = ximg[j];
+//        py = yimg[j];
+//        if(px>=res||py>=res||px<0||py<0)
+//        {
+//            cout<<">> point_cloud_velo->points[j].y="<<point_cloud_velo->points[j].y<<", cloud_filtered->points[j].x="<<point_cloud_velo->points[j].x<<"\n"<<endl;
+//            cout<<">> px="<<px<<", py="<<py<<"\n"<<endl;
+//        }
+        z_points.push_back(point_cloud_velo->points[j].z);
+        intensityMap.push_back(point_cloud_velo->points[j].intensity);
+    }
+    nol_z_points = normalize_0_255(z_points,MINZ,MAXZ);
+    //float d_min = *min_element(intensityMap.begin(), intensityMap.end());
+    float d_max = *max_element(intensityMap.begin(), intensityMap.end());
+    nol_intensityMap = normalize_0_255(intensityMap,0,d_max);
+    //d_min = *min_element(densityMap.begin(), densityMap.end());
+    d_max = *max_element(densityMap.begin(), densityMap.end());
+    nol_densityMap = normalize_0_255(densityMap,0,d_max);
+    //float density_max = *max_element(densityMap.begin(), densityMap.end());
+
+
+    cv::Mat img(res, res, CV_8UC3,Scalar(0,0,0));  //
+
+    //img(res, res, CV_8UC3,Scalar(0,0,0));
+    for (int i=0;i<size_cloud;i++)
+    {
+        px = ximg[i];
+        py = yimg[i];
+        img.at<Vec3b>(py,px)[0] = nol_densityMap[i];
+        //img.at<Vec3b>(py,px)[0] = 0;
+        img.at<Vec3b>(py,px)[1] = nol_z_points[i];
+        img.at<Vec3b>(py,px)[2] = nol_intensityMap[i];
+        //img.at<Vec3b>(py,px)[2] = 0;
+        //img.at<uchar>(py,px) = nol_z_points[i];
+
+
+//        if(px>=res||py>=res||px<0||py<0)
+//        {
+//            cout<<">> px="<<px<<", py="<<py<<"\n"<<endl;
+//        }else //BGR
+//        {
+//            img.at<Vec3b>(py,px)[0] = nol_densityMap[i];
+//            //img.at<Vec3b>(py,px)[0] = 0;
+//            img.at<Vec3b>(py,px)[1] = nol_z_points[i];
+//            img.at<Vec3b>(py,px)[2] = nol_intensityMap[i];
+//            //img.at<Vec3b>(py,px)[2] = 0;
+//            //img.at<uchar>(py,px) = nol_z_points[i];
+//        }
+
+
+
+    }
+    img_src = img;
+}
+
+
+//int LOAD_LIDAR_DATA::lidar_process(vector<velo_data_t> velo_points)
+pcl::PointCloud<pcl::PointXYZI>::Ptr process_merged(vector<velo_data_t> velo_points,vector<imu_data_t> imu_data)
+{
+    double origin_x;
+    double origin_y;
+    float xy_scale_factor = 0.8505;
+
+    pcl::PointCloud<pcl::PointXYZI>::Ptr src(new pcl::PointCloud<pcl::PointXYZI>);
+    pcl::PointCloud<pcl::PointXYZI>::Ptr tgt(new pcl::PointCloud<pcl::PointXYZI>);
+    pcl::PointCloud<pcl::PointXYZI>::Ptr Final(new pcl::PointCloud<pcl::PointXYZI>);
+
+
+    for(int k= 0;k<velo_points.size();k++)
+    {
+        //*************** 获取点
+        pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_velo(new pcl::PointCloud<pcl::PointXYZI>);
+        //point_cloud_velo->width    = 5182;
+        point_cloud_velo->width    = velo_points[k].counts;
+        point_cloud_velo->height   = 1;
+        point_cloud_velo->is_dense = false;  //不是稠密型的
+        point_cloud_velo->points.resize(point_cloud_velo->width*point_cloud_velo->height);
+        for (int i=0;i < velo_points[k].counts;i++ )
+        {
+            point_cloud_velo->points[i].x = velo_points[k].y[i];
+            point_cloud_velo->points[i].y = velo_points[k].x[i];
+            //            point_cloud_velo->points[i].z = zz[i]-MINZ;
+            point_cloud_velo->points[i].z = velo_points[k].z[i];
+            point_cloud_velo->points[i].intensity = velo_points[k].r[i];
+        }
+//        for (int i=0;i < velo_points[k].counts;i++ )
+//            cout<<">>> points: x="<<point_cloud_velo->points[i].x<<"<----->"<<velo_points[k].y[i]<<endl;
+        //************** 地面滤出＋边界滤出
+        pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZI>);
+        //cloud_filtered = passthrough_filter(point_cloud_velo,true);
+        pcl::copyPointCloud(*point_cloud_velo,*cloud_filtered);
+
+        //***********处理并转换imu数据
+        imu_data_t merc = trans_imu_data(imu_data[k].lat,imu_data[k].lon,imu_data[k].direction);
+        if (k == 0)
+        {
+            origin_x = merc.lat;origin_y = merc.lon;
+            pcl::copyPointCloud(*cloud_filtered, *tgt);
+            continue;
+        }
+        double d_x = (merc.lat - origin_x)*xy_scale_factor;
+        double d_y = (merc.lon - origin_y)*xy_scale_factor;
+        cout<<"d_x="<<d_x<<"d_y"<<d_y<<endl;
+
+        //************平移velo
+        int M = cloud_filtered->points.size();
+        for (int i=0;i < M;i++ )
+        {
+            pcl::PointXYZI p;
+            float x = cloud_filtered->points[i].x + d_x;
+            float y = cloud_filtered->points[i].y + d_y;
+            p.x = x;
+            p.y = y;
+            p.z = cloud_filtered->points[i].z;
+            p.intensity = cloud_filtered->points[i].intensity;
+            src->points.push_back(p);
+        }
+        src->width = 1;
+        src->height = M;
+        //*************配准
+        pcl::IterativeClosestPoint<pcl::PointXYZI, pcl::PointXYZI> icp;   //创建IterativeClosestPoint的对象
+        icp.setInputCloud(src);                 //cloud_in设置为点云的源点
+        icp.setInputTarget(tgt);               //cloud_out设置为与cloud_in对应的匹配目标
+        icp.align(*Final);                             //打印配准相关输入信息
+
+        //# 合并配准后的数据
+        int S = Final->points.size();
+        int L = tgt->points.size();
+        tgt->points.resize(S+L);
+        for (int i=0;i < S;i++ ) //合并配准后的数据 tgt = tgt+final
+        {
+            pcl::PointXYZI p_tmp;
+            p_tmp.x = Final->points[i].x;
+            p_tmp.y = Final->points[i].y;
+            p_tmp.z = Final->points[i].z;
+            p_tmp.intensity = Final->points[i].intensity;
+            tgt->points.push_back(p_tmp);
+        }
+//
+//        std::cout << "has converged:" << icp.hasConverged() << " score: " <<
+//        icp.getFitnessScore() << std::endl;
+//        std::cout << icp.getFinalTransformation() << std::endl;
+    }
+
+    //************** 地面滤出＋边界滤出
+    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered_second(new pcl::PointCloud<pcl::PointXYZI>);
+    cloud_filtered_second = passthrough_filter(tgt,true);
+
+
+    return cloud_filtered_second;
+}
+//int LOAD_LIDAR_DATA::process_merged()
+
+
+//int LOAD_LIDAR_DATA::process_imu_data(double lat, double lon, double direction)
+imu_data_t trans_imu_data(double lat, double lon, double direction)
+{
+    // lat 经度　lon 维度
+    imu_data_t imu_data;
+    projPJ pj_merc, pj_latlong;
+    double x, y;
+
+	if (!(pj_merc = pj_init_plus("+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs")))
+		exit(1);
+	if (!(pj_latlong = pj_init_plus("+proj=longlat +datum=WGS84 +no_defs")))
+		exit(1);
+
+	//x = -9.866554;
+	//y = 7.454779;
+
+//	lat *= DEG_TO_RAD;
+//	lon *= DEG_TO_RAD;
+	pj_transform(pj_latlong, pj_merc, 1, 1, &lat, &lon, NULL);
+
+    imu_data.lat = lat;
+    imu_data.lon = lon;
+    imu_data.direction = direction;
+
+	std::cout << "(" << lat << " , " << lon << ")" << std::endl;
+	return imu_data;
+}

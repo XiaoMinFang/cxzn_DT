@@ -21,11 +21,15 @@
 //#include <pcl/ModelCoefficients.h>
 //#include <pcl/filters/project_inliers.h>
 #include <pcl/kdtree/kdtree_flann.h>
+#include <pcl/registration/icp.h>
 
 //#include <pcl/common/transforms.h>
 //#include <pcl/correspondence.h>
 
 #include <opencv2/opencv.hpp>
+
+
+#include <proj_api.h>
 
 //#define OVERLOP_NUM 3
 ////点云边
@@ -38,7 +42,8 @@
 
 #define GROUND_LIMIT_MIN 0.5
 #define GROUND_LIMIT_MAX 5
-#define OVERLOP_NUM 3
+#define OVERLOP_NUM 3//
+#define RES 480 //创建图片像素
 
 
 struct velo_data_t {
@@ -48,20 +53,50 @@ struct velo_data_t {
 	float *z;
 	int *r;
 };
-class LOAD_LIDAR_DATA{
-    std::vector<velo_data_t> points_velo_list;
+struct imu_origin_t{
+    double x;
+    double y;
+    //imu_origin_t(){};
+};
+struct imu_data_t{
+    double lat;
+    double lon;
+    double direction;
+    //imu_origin_t(){};
 };
 
 
-
-void get_img(cv::Mat& img_src,velo_data_t velo_points);
-
-velo_data_t load_data(std::string velo_filename160,std::string velo_filename161);
-
-pcl::PointCloud<pcl::PointXYZI>::Ptr passthrough_filter(pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_velo);
+pcl::PointCloud<pcl::PointXYZI>::Ptr process_merged(std::vector<velo_data_t> velo_points,std::vector<imu_data_t> imu_data);
+imu_data_t trans_imu_data(double lat, double lon, double direction);
 
 
-int lidar_process(velo_data_t velo_points);
+//class LOAD_LIDAR_DATA{
+//
+//
+// public:
+//	imu_origin_t imu_origin;
+//	double lan_origin = 0.0;
+//	double lon_origin = 0.0;
+//	std::vector<velo_data_t> points_velo_list;
+//
+//    LOAD_LIDAR_DATA();
+//    ~LOAD_LIDAR_DATA();
+//    int main_process(velo_data_t velo_points);
+//    int process_imu_data(double lat, double lon, double direction);
+//    int process_merged();
+//
+//};
+
+
+void get_img(cv::Mat& img_src,pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_velo);
+
+velo_data_t read_velo_data(std::string velo_filename160,std::string velo_filename161);
+imu_data_t read_imu_data(std::string imu_filename);
+
+pcl::PointCloud<pcl::PointXYZI>::Ptr passthrough_filter(pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_velo,bool is_gro);
+
+
+
 
 
 #endif // LOAD_DATA_HPP

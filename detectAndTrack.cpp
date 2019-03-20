@@ -340,9 +340,9 @@ int pcl_main()
     string velo_161 = velo_path_161+to_string(s_id) + bin_s;
     cout<< velo_160<<","<<velo_161<<endl;
     velo_data_t velo_points;
-    velo_points = load_data(velo_path_160,velo_path_161);
+    velo_points = read_velo_data(velo_path_160,velo_path_161);
 
-    get_img(mat_img,velo_points);
+    //get_img(mat_img,velo_points);
     if (mat_img.rows == 0 || mat_img.cols == 0) return (0);
     cv::imshow("img",mat_img);
     cv::waitKey(0);
@@ -361,8 +361,8 @@ int pcl_main()
         string bin_s = ".bin";
         string velo_160 = velo_path_160+to_string(i) + bin_s;
         string velo_161 = velo_path_161+to_string(i) + bin_s;
-        velo_points = load_data(velo_path_160,velo_path_161);
-        get_img(mat_img,velo_points);
+        velo_points = read_velo_data(velo_path_160,velo_path_161);
+        //get_img(mat_img,velo_points);
         cv::imshow("img",mat_img);
         cv::waitKey(0);
 
