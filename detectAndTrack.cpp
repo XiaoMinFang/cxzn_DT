@@ -23,30 +23,18 @@
 #include <opencv2/videoio/videoio.hpp>
 
 #include "load_data.hpp"
+#include "cxzn_tracking.hpp"
 
 
 
 
 
-#define MAX_TRACKING_NUM 10 // 最多tracking的个数
 
 
 using namespace std;
 using namespace cv;
 
-struct track_t {
-	Rect2d init_rects;                // 初始跟踪框
-	int id;                        // 跟踪 id
-	bool is_acti;                  //是否激活
-	Rect2d update_rect;                  // 跟踪结果
-	Ptr<TrackerMOSSE> tracker;   //
 
-};
-struct res_track_t {
-	Rect2d res_track;                // 初始跟踪框
-	int id;                        // 跟踪 id
-	int l_tracking;                 //跟踪长度
-};
 
 void read_velo_data(string velofilename)
 {
@@ -76,82 +64,6 @@ void read_velo_data(string velofilename)
 
 }
 
-
-//初始化tracking
-vector<track_t> init_tracking(vector<bbox_t> obj_rect,Mat mat_img)
-{
-	Rect2d rect_obj;
-	vector<track_t> tracking(MAX_TRACKING_NUM);
-
-	int n = obj_rect.size();
-	if (n < MAX_TRACKING_NUM)
-	{
-
-		for (int i = 0; i < n; i++)
-		{
-			rect_obj.height = obj_rect[i].h; rect_obj.width = obj_rect[i].w;
-			rect_obj.x = obj_rect[i].x; rect_obj.y = obj_rect[i].y;
-			tracking[i].tracker = TrackerMOSSE::create();
-			tracking[i].tracker->init(mat_img, rect_obj);
-			tracking[i].init_rects = rect_obj;
-			tracking[i].id = i;
-			tracking[i].is_acti = true;
-
-		}
-	}
-	else
-	{
-		for (int i = 0; i < MAX_TRACKING_NUM; i++)
-		{
-			rect_obj.height = obj_rect[i].h; rect_obj.width = obj_rect[i].w;
-			rect_obj.x = obj_rect[i].x; rect_obj.y = obj_rect[i].y;
-			tracking[i].tracker = TrackerMOSSE::create();
-			tracking[i].tracker->init(mat_img, rect_obj);
-			tracking[i].init_rects = rect_obj;
-			tracking[i].id = i;
-			tracking[i].is_acti = true;
-		}
-	}
-
-
-
-	return tracking;
-}
-
-vector<res_track_t> init_res_tracking(vector<bbox_t> obj_rect)
-{
-	vector<res_track_t> res_tracking(MAX_TRACKING_NUM);
-	Rect2d rect_obj;
-
-	int n = obj_rect.size();
-	if (n < MAX_TRACKING_NUM)
-	{
-
-		for (int i = 0; i < n; i++)
-		{
-			rect_obj.height = obj_rect[i].h; rect_obj.width = obj_rect[i].w;
-			rect_obj.x = obj_rect[i].x; rect_obj.y = obj_rect[i].y;
-
-			res_tracking[i].l_tracking = 0;
-			res_tracking[i].id = i;
-			res_tracking[i].res_track = rect_obj;
-
-		}
-	}
-	else
-	{
-		for (int i = 0; i < MAX_TRACKING_NUM; i++)
-		{
-			rect_obj.height = obj_rect[i].h; rect_obj.width = obj_rect[i].w;
-			rect_obj.x = obj_rect[i].x; rect_obj.y = obj_rect[i].y;
-
-			res_tracking[i].l_tracking = 0;
-			res_tracking[i].id = i;
-			res_tracking[i].res_track = rect_obj;
-		}
-	}
-	return res_tracking;
-}
 
 
 
@@ -250,8 +162,8 @@ int video_main()
             n_tracks = obj_result_vec.size();
             if (n_tracks < 1) continue; //没有检测到目标就再来一帧
             //初始化track
-            tracking = init_tracking(obj_result_vec, mat_img);
-            res_trcking = init_res_tracking(obj_result_vec);
+            init_tracking(tracking,obj_result_vec, mat_img);
+            init_res_tracking(res_trcking,obj_result_vec);
 
             first_frame = false;
         }
@@ -259,23 +171,11 @@ int video_main()
         {
             obj_result_vec = detector.detect(mat_img);
             draw_detect_boxes(mat_img, obj_result_vec, obj_names);
-            for (int i = 0; i < n_tracks; i++)
-            {
-                Rect2d track_res;
-                tracking[i].tracker->update(mat_img, track_res);
-                if (track_res.x == 0 & track_res.y==0 & track_res.width == 0 & track_res.height == 0)
-                {
-                    cout<<">>>>>> no trackings\n"<<endl;
-                }
-                res_trcking[i].res_track = track_res;
-                res_trcking[i].id = i;
-                res_trcking[i].l_tracking++;
-                draw_boxes(mat_img, track_res, Scalar(0, 255, 0), "track");
-                /*imshow("tracking", mat_img);
-                waitKey(1);*/
-                //destroyAllWindows;
-                //cvWaitKey(0);
-            }
+
+            update_tracking(tracking,res_trcking,mat_img,n_tracks); //更新
+
+
+
             if (count%n_interval == 0)
             {//重新更新跟踪结果
                 //若某跟踪框与所有的检测框的iou<0.5,就删除该跟踪框；
@@ -285,8 +185,8 @@ int video_main()
                 if (obj_result_vec.size() >= 1)
                 {
                     n_tracks = obj_result_vec.size();
-                    tracking = init_tracking(obj_result_vec, mat_img);
-                    res_trcking = init_res_tracking(obj_result_vec);
+                    init_tracking(tracking,obj_result_vec, mat_img);
+                    init_res_tracking(tracking,obj_result_vec);
                     putText(mat_img, "reset tracking", Point2f(20, 20), FONT_HERSHEY_COMPLEX_SMALL, 1.2, Scalar(255, 0, 0), 1);
                     cout << "reset tracking\n" << endl;
                 }

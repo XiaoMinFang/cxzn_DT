@@ -5,7 +5,7 @@ using namespace std;
 using namespace cv;
 
 
-imu_origin_t imu_origin;
+
 
 std::vector<float> normalize_0_255(vector<float> datas,float dMinValue,float dMaxValue)
 {
@@ -613,10 +613,23 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr process_merged(vector<velo_data_t> velo_poi
     endTime = clock();
     cout << "passthrough_filter run time is: " <<(double)(endTime - startTime) / CLOCKS_PER_SEC << "s" << endl;
 
+    release_velo_data(velo_points);
+
     return tgt;
 //    return cloud_filtered_second;
 }
 //int LOAD_LIDAR_DATA::process_merged()
+
+void release_velo_data(vector<velo_data_t> velo_points)
+{
+    for(int k= 0;k<OVERLOP_NUM;k++)
+    {
+        delete[] velo_points[k].x;
+        delete[] velo_points[k].y;
+        delete[] velo_points[k].z;
+        delete[] velo_points[k].r;
+    }
+}
 
 //void move_velo()
 //{

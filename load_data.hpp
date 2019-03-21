@@ -68,6 +68,8 @@ struct imu_data_t{
 
 
 pcl::PointCloud<pcl::PointXYZI>::Ptr process_merged(std::vector<velo_data_t> velo_points,std::vector<imu_data_t> imu_data);
+void release_velo_data(std::vector<velo_data_t> velo_points);
+
 imu_data_t trans_imu_data(double lat, double lon, double direction);
 
 
