@@ -17,6 +17,7 @@
 
 //#include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/passthrough.h>
+#include <pcl/common/transforms.h>
 //#include <pcl/filters/statistical_outlier_removal.h>
 //#include <pcl/ModelCoefficients.h>
 //#include <pcl/filters/project_inliers.h>
@@ -93,8 +94,8 @@ void get_img(cv::Mat& img_src,pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_v
 velo_data_t read_velo_data(std::string velo_filename160,std::string velo_filename161);
 imu_data_t read_imu_data(std::string imu_filename);
 
-pcl::PointCloud<pcl::PointXYZI>::Ptr passthrough_filter(pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_velo,bool is_gro);
-
+//pcl::PointCloud<pcl::PointXYZI>::Ptr passthrough_filter(pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_velo,bool is_gro);
+void passthrough_filter(pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_velo,bool is_gro);
 
 
 

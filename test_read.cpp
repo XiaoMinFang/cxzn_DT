@@ -308,6 +308,36 @@ using namespace cv;
 //
 //}
 
+int move_pointcloud_main()
+{
+    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZI>);
+    pcl::PointCloud<pcl::PointXYZI>::Ptr move_cloud(new pcl::PointCloud<pcl::PointXYZI>);
+    cloud->width=5;
+    cloud->height=1;
+    cloud->points.resize(cloud->width*cloud->height);
+    for(size_t i=0;i<cloud->points.size();++i)
+    {
+    cloud->points[i].x= 2.0;
+    cloud->points[i].y= 2.0;
+    cloud->points[i].z= 5.0;
+    cloud->points[i].intensity = 0.0;
+    }
+
+
+    Eigen::Matrix4f transform_xy = Eigen::Matrix4f::Identity();
+    transform_xy(0,3) = 1;
+    transform_xy(1,3) = 1;
+    pcl::transformPointCloud(*cloud, *move_cloud, transform_xy);
+
+    for(size_t i=0;i<cloud->points.size();++i)
+    {
+        std::cerr<<"src:"<<cloud->points[i].x<<" " <<cloud->points[i].y<<" " <<cloud->points[i].z<<std::endl;
+        std::cerr<<"trans:"<<move_cloud->points[i].x<<" " <<move_cloud->points[i].y<<" " <<move_cloud->points[i].z<<std::endl;
+    }
+
+}
+
+
 int test_vector_main()
 {
     int OVERLAP_FRAME_COUNT = 3;
@@ -377,30 +407,52 @@ string&   replace_all(string&   str,const   string&   old_value,const   string& 
     return   str;
 }
 
+void copy_labelfile(string src, string dst)
+{
+    ifstream in(src,ios::in);
+    ofstream out(dst,ios::out);
+    if (!in.is_open()) {
+        cout << "error open file " << src << endl;
+        exit(EXIT_FAILURE);
+    }
+    if (!out.is_open()) {
+        cout << "error open file " << dst << endl;
+        exit(EXIT_FAILURE);
+    }
+    if (src == dst) {
+        cout << "the src file can't be same with dst file" << endl;
+        exit(EXIT_FAILURE);
+    }
+    int id;
+    float x,y,w,h;
+    while(!in.eof())
+    {
+        in>>id>>x>>y>>w>>h;
+        if(id == -1) break;
+        out<<id<<" "<<x<<" "<<y<<" "<<w<<" "<<h<<"\n";
+        id = -1;
+    }
+    in.close();
+    out.close();
+}
+int copy_labelfile_main()
+{
+    string src_f = "/home/kid/min/0.txt";
+    string dst_f = "/home/kid/min/3.txt";
+    copy_labelfile(src_f,dst_f);
+}
 
 int main()
 {
-    //
-//    float array1[] = { 1, 4, 6, 7, 9, 12 };
-//	float array2[] = { 2, 3, 4, 5, 6, 7, 8, 10 };
-//	int lenA = sizeof(array1) / sizeof(int);
-//    int lenB = sizeof(array2) / sizeof(int);
-//    float *ret = SortArry(array1, lenA, array2, lenB);
-//    for (int i = 0; i < (lenA + lenB); i++)
-//        cout << ret[i] <<endl;
-//    delete[] ret; //清空堆内存
-//
-//
-
-//	int sucess = creat_pcd();
     Mat img;
     ifstream fin160("/home/kid/min/Annotations/LiDar/anno2/vlp160.txt", ios::in);
     ifstream fin161("/home/kid/min/Annotations/LiDar/anno2/vlp161.txt", ios::in);
-    string velo_path_160;
-	string velo_path_161;
+    string velo_path_160,velo_path_161;
+    string label_path_old;
+    string label_path_new;
 	string imu_path;
 	int counts=0;
-	string save_path_tmp1,save_path_tmp2,save_path;
+	string save_path;
 
     velo_data_t velo_point;
     imu_data_t imu_data;
@@ -408,14 +460,19 @@ int main()
     vector<imu_data_t> imu_datas;
 
 
-	//while(!fin160.eof() && !fin161.eof())
+
 	clock_t startTime,endTime;
-    for(int i = 0;i<6;i++)
+	double merg_t=0,getimg_t=0;
+	int c=0;
+    //for(int i = 0;i<6;i++)
+    while(!fin160.eof() && !fin161.eof())
     {
         getline(fin160,velo_path_160);
         cout<<velo_path_160<<endl;
         getline(fin161,velo_path_161);
         cout<<velo_path_161<<endl;
+        if (velo_path_160 =="" && velo_path_161 == "")
+            break;
 
         velo_point = read_velo_data(velo_path_160,velo_path_161);
         velo_points.push_back(velo_point);
@@ -428,52 +485,44 @@ int main()
         imu_datas.push_back(imu_data);
         if(velo_points.size()>=OVERLOP_NUM)
         {
+            c++;
             pcl::PointCloud<pcl::PointXYZI>::Ptr pc(new pcl::PointCloud<pcl::PointXYZI>);
             startTime = clock();//计时开始
             pc = process_merged(velo_points,imu_datas);
             endTime = clock();
+            merg_t += (double)(endTime - startTime) / CLOCKS_PER_SEC;
             cout << "process_merged run time is: " <<(double)(endTime - startTime) / CLOCKS_PER_SEC << "s" << endl;
             startTime = clock();//计时开始
             get_img(img,pc);
             endTime = clock();
+            getimg_t += (double)(endTime - startTime) / CLOCKS_PER_SEC;
             cout << "get_img run time is: " <<(double)(endTime - startTime) / CLOCKS_PER_SEC << "s" << endl;
-            cv::imshow("img",img);
-            cv::waitKey(0);
+
+            save_path = replace_all(imu_path,"imuseq","img_over3");
+            save_path = replace_all(save_path,".txt",".png");
+            cout<<"save_path:"<<save_path<<endl;
+            imwrite(save_path,img);
+
+
+            label_path_old  = replace_all(imu_path,"img_over3","labels");
+            label_path_new  = replace_all(save_path,".png",".txt");
+            copy_labelfile(label_path_old,label_path_new);
+
+            cout<<"old>>>"<<label_path_old<<endl;
+            cout<<"new>>>"<<label_path_new<<endl;
+
+//            cv::imshow("img",img);
+//            cv::waitKey(0);
             imu_datas.clear();
             velo_points.clear();
         }else{continue;}
-
-
-        //get_img(img,velo_points);
-//        cv::imshow("img",img);
-//        cv::waitKey(0);
-
-        save_path_tmp1 = replace_all(velo_path_161,"veloseq","img_cpp_3c");
-        save_path_tmp2 = replace_all(save_path_tmp1,"VLP161/","");
-        save_path = replace_all(save_path_tmp2,".bin",".png");
-//
-//        cout<< save_path<<endl;
-        //imwrite(save_path,img);
-        counts++;
+        velo_path_160 = "none";
+        velo_path_161 = "none";
     }
+    cout<<"average merg time:>>>>>>>>>>"<<merg_t/(double)c<<endl;
+    cout<<"average get_img time:>>>>>>>>>>"<<getimg_t/(double)c<<endl;
     fin160.close();
     fin161.close();
-
-
-//	string save_path = "/home/kid/min/Annotations/LiDar/anno3/";
-//
-//	int s_id = 97;int e_id = 603;
-//
-//	Mat mat_img;
-//	VideoWriter writer;
-//	string bin_s = ".bin";
-//    string velo_160 = velo_path_160+to_string(s_id) + bin_s;
-//    string velo_161 = velo_path_161+to_string(s_id) + bin_s;
-//    cout<< velo_160<<endl;
-////    load_data(img);
-////    cv::imshow("img",img);
-////    cv::waitKey(0);
-//    cv::imwrite("test.png",img);
 	return (1);
 }
 
@@ -482,7 +531,8 @@ int imu_main()
     projPJ pj_merc, pj_latlong;
     double x, y;
 
-	if (!(pj_merc = pj_init_plus("+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs")))
+    //+proj=tmerc +lat_0=0 +lon_0=120 +k=1 +x_0=500000 +y_0=0 +a=6378140 +b=6356755.288157528 +units=m +no_defs
+	if (!(pj_merc = pj_init_plus("+proj=tmerc +lat_0=0 +lon_0=120 +k=1 +x_0=500000 +y_0=0 +a=6378140 +b=6356755.288157528 +units=m +no_defs")))
 		exit(1);
 	if (!(pj_latlong = pj_init_plus("+proj=longlat +datum=WGS84 +no_defs")))
 		exit(1);
@@ -490,13 +540,10 @@ int imu_main()
 	x = -9.866554;
 	y = 7.454779;
 
-	x *= DEG_TO_RAD;
-	y *= DEG_TO_RAD;
+//	x *= DEG_TO_RAD;
+//	y *= DEG_TO_RAD;
 
 	pj_transform(pj_latlong, pj_merc, 1, 1, &x, &y, NULL);
-
-	x /= DEG_TO_RAD;
-	y /= DEG_TO_RAD;
 
 	std::cout << "(" << x << " , " << y << ")" << std::endl;
 

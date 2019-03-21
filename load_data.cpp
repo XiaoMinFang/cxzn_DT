@@ -1,4 +1,5 @@
 #include "load_data.hpp"
+#include <ctime>
 
 using namespace std;
 using namespace cv;
@@ -53,9 +54,41 @@ float *SortArry(float *StrA,int lenA, float *StrB, int lenB)
 }
 
 
-pcl::PointCloud<pcl::PointXYZI>::Ptr passthrough_filter(pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_velo,bool is_gro)
+//pcl::PointCloud<pcl::PointXYZI>::Ptr passthrough_filter(pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_velo,bool is_gro)
+//{
+//    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZI>);
+//    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered_x(new pcl::PointCloud<pcl::PointXYZI>);
+//    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered_y(new pcl::PointCloud<pcl::PointXYZI>);
+//    //pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered_z(new pcl::PointCloud<pcl::PointXYZI>);
+//
+//    pcl::PassThrough<pcl::PointXYZI> pass;
+//
+//    pass.setInputCloud(point_cloud_velo);
+//    pass.setFilterFieldName("x");
+//    pass.setFilterLimits(MINX,MAXX);
+//    pass.filter(*cloud_filtered_x);
+//
+//    //pass.setFilterLimitsNegative (true);
+//    pass.setInputCloud(cloud_filtered_x);
+//    pass.setFilterFieldName("y");
+//    pass.setFilterLimits(MINY,MAXY);
+//    pass.filter(*cloud_filtered_y);
+//
+//    if (is_gro == true)
+//    {
+//        pass.setInputCloud(cloud_filtered_y);
+//        pass.setFilterFieldName("z");
+//        pass.setFilterLimits(GROUND_LIMIT_MIN,GROUND_LIMIT_MAX);
+//        pass.filter(*cloud_filtered);
+//        return cloud_filtered;
+//
+//    }else{
+//        return cloud_filtered_y;
+//    }
+//}
+
+void passthrough_filter(pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_velo,bool is_gro)
 {
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZI>);
     pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered_x(new pcl::PointCloud<pcl::PointXYZI>);
     pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered_y(new pcl::PointCloud<pcl::PointXYZI>);
     //pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered_z(new pcl::PointCloud<pcl::PointXYZI>);
@@ -75,16 +108,22 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr passthrough_filter(pcl::PointCloud<pcl::Poi
 
     if (is_gro == true)
     {
+        pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZI>);
         pass.setInputCloud(cloud_filtered_y);
         pass.setFilterFieldName("z");
         pass.setFilterLimits(GROUND_LIMIT_MIN,GROUND_LIMIT_MAX);
         pass.filter(*cloud_filtered);
-        return cloud_filtered;
+
+        pcl::copyPointCloud(*cloud_filtered,*point_cloud_velo);
+        //return cloud_filtered;
 
     }else{
-        return cloud_filtered_y;
+        pcl::copyPointCloud(*cloud_filtered_y,*point_cloud_velo);
+        //return cloud_filtered_y;
     }
 }
+
+
 
 velo_data_t read_velo_data(string velo_filename160,string velo_filename161)
 {
@@ -154,7 +193,8 @@ velo_data_t read_velo_data(string velo_filename160,string velo_filename161)
         return points_velo;
 	}
 
-
+    fin160.close();
+    fin161.close();
 }
 
 imu_data_t read_imu_data(string imu_filename)
@@ -169,6 +209,7 @@ imu_data_t read_imu_data(string imu_filename)
         imu_datas.lon = lon;
         imu_datas.direction = direction;
     }
+    fin.close();
     return imu_datas;
 }
 //void get_img(cv::Mat& img_src,velo_data_t velo_points)
@@ -461,18 +502,19 @@ void get_img(cv::Mat& img_src,pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_v
 //int LOAD_LIDAR_DATA::lidar_process(vector<velo_data_t> velo_points)
 pcl::PointCloud<pcl::PointXYZI>::Ptr process_merged(vector<velo_data_t> velo_points,vector<imu_data_t> imu_data)
 {
+    clock_t startTime,endTime;
+
     double origin_x;
     double origin_y;
-    float xy_scale_factor = 0.8505;
+    double xy_scale_factor = 1;//0.8505
 
     pcl::PointCloud<pcl::PointXYZI>::Ptr src(new pcl::PointCloud<pcl::PointXYZI>);
     pcl::PointCloud<pcl::PointXYZI>::Ptr tgt(new pcl::PointCloud<pcl::PointXYZI>);
     pcl::PointCloud<pcl::PointXYZI>::Ptr Final(new pcl::PointCloud<pcl::PointXYZI>);
-
-
-    for(int k= 0;k<velo_points.size();k++)
+    for(int k= 0;k<OVERLOP_NUM;k++)
     {
         //*************** 获取点
+        startTime = clock();
         pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_velo(new pcl::PointCloud<pcl::PointXYZI>);
         //point_cloud_velo->width    = 5182;
         point_cloud_velo->width    = velo_points[k].counts;
@@ -487,40 +529,53 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr process_merged(vector<velo_data_t> velo_poi
             point_cloud_velo->points[i].z = velo_points[k].z[i];
             point_cloud_velo->points[i].intensity = velo_points[k].r[i];
         }
+        endTime = clock();
+        cout << "getpoints run time is: " <<(double)(endTime - startTime) / CLOCKS_PER_SEC << "s" << endl;
 //        for (int i=0;i < velo_points[k].counts;i++ )
 //            cout<<">>> points: x="<<point_cloud_velo->points[i].x<<"<----->"<<velo_points[k].y[i]<<endl;
         //************** 地面滤出＋边界滤出
-        pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZI>);
+        //pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZI>);
         //cloud_filtered = passthrough_filter(point_cloud_velo,true);
-        pcl::copyPointCloud(*point_cloud_velo,*cloud_filtered);
+        passthrough_filter(point_cloud_velo,true);
+        //pcl::copyPointCloud(*point_cloud_velo,*cloud_filtered);
 
         //***********处理并转换imu数据
+        startTime = clock();
         imu_data_t merc = trans_imu_data(imu_data[k].lat,imu_data[k].lon,imu_data[k].direction);
         if (k == 0)
         {
             origin_x = merc.lat;origin_y = merc.lon;
-            pcl::copyPointCloud(*cloud_filtered, *tgt);
+            pcl::copyPointCloud(*point_cloud_velo, *tgt);
             continue;
         }
-        double d_x = (merc.lat - origin_x)*xy_scale_factor;
-        double d_y = (merc.lon - origin_y)*xy_scale_factor;
-        cout<<"d_x="<<d_x<<"d_y"<<d_y<<endl;
-
+        float d_x = (merc.lat - origin_x)*xy_scale_factor;
+        float d_y = (merc.lon - origin_y)*xy_scale_factor;
+        //cout<<"d_x="<<d_x<<"d_y"<<d_y<<endl;
+//        endTime = clock();
+        cout << "trans_imu run time is: " <<(double)(endTime - startTime) / CLOCKS_PER_SEC << "s" << endl;
         //************平移velo
-        int M = cloud_filtered->points.size();
-        for (int i=0;i < M;i++ )
-        {
-            pcl::PointXYZI p;
-            float x = cloud_filtered->points[i].x + d_x;
-            float y = cloud_filtered->points[i].y + d_y;
-            p.x = x;
-            p.y = y;
-            p.z = cloud_filtered->points[i].z;
-            p.intensity = cloud_filtered->points[i].intensity;
-            src->points.push_back(p);
-        }
-        src->width = 1;
-        src->height = M;
+        startTime = clock();
+//        int M = point_cloud_velo->points.size();
+//        for (int i=0;i < M;i++ )
+//        {
+//            pcl::PointXYZI p;
+//            float x = point_cloud_velo->points[i].x + d_x;
+//            float y = point_cloud_velo->points[i].y + d_y;
+//            p.x = x;
+//            p.y = y;
+//            p.z = point_cloud_velo->points[i].z;
+//            p.intensity = point_cloud_velo->points[i].intensity;
+//            src->points.push_back(p);
+//        }
+//        src->width = 1;
+//        src->height = M;
+        Eigen::Matrix4f transform_xy = Eigen::Matrix4f::Identity();
+        transform_xy(0,3) = d_x;
+        transform_xy(1,3) = d_y;
+        pcl::transformPointCloud(*point_cloud_velo, *src, transform_xy);
+
+        endTime = clock();
+        cout << "velo_move and trans_imu run time is: " <<(double)(endTime - startTime) / CLOCKS_PER_SEC << "s" << endl;
         //*************配准
         pcl::IterativeClosestPoint<pcl::PointXYZI, pcl::PointXYZI> icp;   //创建IterativeClosestPoint的对象
         icp.setInputCloud(src);                 //cloud_in设置为点云的源点
@@ -528,18 +583,22 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr process_merged(vector<velo_data_t> velo_poi
         icp.align(*Final);                             //打印配准相关输入信息
 
         //# 合并配准后的数据
-        int S = Final->points.size();
-        int L = tgt->points.size();
-        tgt->points.resize(S+L);
-        for (int i=0;i < S;i++ ) //合并配准后的数据 tgt = tgt+final
-        {
-            pcl::PointXYZI p_tmp;
-            p_tmp.x = Final->points[i].x;
-            p_tmp.y = Final->points[i].y;
-            p_tmp.z = Final->points[i].z;
-            p_tmp.intensity = Final->points[i].intensity;
-            tgt->points.push_back(p_tmp);
-        }
+        startTime = clock();
+//        int S = Final->points.size();
+//        int L = tgt->points.size();
+//        tgt->points.resize(S+L);
+//        for (int i=0;i < S;i++ ) //合并配准后的数据 tgt = tgt+final
+//        {
+//            pcl::PointXYZI p_tmp;
+//            p_tmp.x = Final->points[i].x;
+//            p_tmp.y = Final->points[i].y;
+//            p_tmp.z = Final->points[i].z;
+//            p_tmp.intensity = Final->points[i].intensity;
+//            tgt->points.push_back(p_tmp);
+//        }
+        *tgt = *tgt+*Final;
+        endTime = clock();
+        cout << "match run time is: " <<(double)(endTime - startTime) / CLOCKS_PER_SEC << "s" << endl;
 //
 //        std::cout << "has converged:" << icp.hasConverged() << " score: " <<
 //        icp.getFitnessScore() << std::endl;
@@ -547,13 +606,26 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr process_merged(vector<velo_data_t> velo_poi
     }
 
     //************** 地面滤出＋边界滤出
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered_second(new pcl::PointCloud<pcl::PointXYZI>);
-    cloud_filtered_second = passthrough_filter(tgt,true);
+//    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered_second(new pcl::PointCloud<pcl::PointXYZI>);
+//    cloud_filtered_second = passthrough_filter(tgt,true);
+    startTime = clock();
+    passthrough_filter(tgt,true);
+    endTime = clock();
+    cout << "passthrough_filter run time is: " <<(double)(endTime - startTime) / CLOCKS_PER_SEC << "s" << endl;
 
-
-    return cloud_filtered_second;
+    return tgt;
+//    return cloud_filtered_second;
 }
 //int LOAD_LIDAR_DATA::process_merged()
+
+//void move_velo()
+//{
+//    Eigen::Matrix4f transform_xy = Eigen::Matrix4f::Identity();
+//    transform_xy(0,3) = 1;
+//    transform_xy(1,3) = 1;
+//}
+
+
 
 
 //int LOAD_LIDAR_DATA::process_imu_data(double lat, double lon, double direction)
@@ -562,24 +634,21 @@ imu_data_t trans_imu_data(double lat, double lon, double direction)
     // lat 经度　lon 维度
     imu_data_t imu_data;
     projPJ pj_merc, pj_latlong;
-    double x, y;
 
-	if (!(pj_merc = pj_init_plus("+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs")))
+    // +proj=tmerc +lat_0=0 +lon_0=120 +k=1 +x_0=500000 +y_0=0 +a=6378140 +b=6356755.288157528 +units=m +no_defs  epsg:2385 东经118.30 - 121.30
+    // +proj=tmerc +lat_0=0 +lon_0=123 +k=1 +x_0=500000 +y_0=0 +a=6378140 +b=6356755.288157528 +units=m +no_defs  epsg:2386 东经121.30 - 124.30
+	if (!(pj_merc = pj_init_plus("+proj=tmerc +lat_0=0 +lon_0=123 +k=1 +x_0=500000 +y_0=0 +a=6378140 +b=6356755.288157528 +units=m +no_defs")))
 		exit(1);
-	if (!(pj_latlong = pj_init_plus("+proj=longlat +datum=WGS84 +no_defs")))
+	if (!(pj_latlong = pj_init_plus("+proj=longlat +datum=WGS84 +no_defs"))) //WGS84这个GPS所用的系统
 		exit(1);
 
-	//x = -9.866554;
-	//y = 7.454779;
 
-//	lat *= DEG_TO_RAD;
-//	lon *= DEG_TO_RAD;
 	pj_transform(pj_latlong, pj_merc, 1, 1, &lat, &lon, NULL);
 
     imu_data.lat = lat;
     imu_data.lon = lon;
     imu_data.direction = direction;
 
-	std::cout << "(" << lat << " , " << lon << ")" << std::endl;
+	//std::cout << "(" << lat << " , " << lon << ")" << std::endl;
 	return imu_data;
 }
