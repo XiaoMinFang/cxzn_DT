@@ -1,4 +1,4 @@
-#include "load_data.hpp"
+#include "load_lidar_data.hpp"
 #include <ctime>
 
 using namespace std;
@@ -619,6 +619,33 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr process_merged(vector<velo_data_t> velo_poi
 //    return cloud_filtered_second;
 }
 //int LOAD_LIDAR_DATA::process_merged()
+
+
+void process_single(pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_velo,velo_data_t velo_points)
+{
+    //pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_velo(new pcl::PointCloud<pcl::PointXYZI>);
+
+    point_cloud_velo->width    = velo_points.counts;
+    point_cloud_velo->height   = 1;
+    point_cloud_velo->is_dense = false;  //不是稠密型的
+    point_cloud_velo->points.resize(point_cloud_velo->width*point_cloud_velo->height);
+    for (int i=0;i < velo_points.counts;i++ )
+    {
+        point_cloud_velo->points[i].x = velo_points.y[i];
+        point_cloud_velo->points[i].y = velo_points.x[i];
+        //            point_cloud_velo->points[i].z = zz[i]-MINZ;
+        point_cloud_velo->points[i].z = velo_points.z[i];
+        point_cloud_velo->points[i].intensity = velo_points.r[i];
+    }
+
+    cout<<"before passthrough_filtered:"<<point_cloud_velo->points.size()<<endl;
+    passthrough_filter(point_cloud_velo,true);
+
+    cout<<"after passthrough_filtered:"<<point_cloud_velo->points.size()<<endl;
+}
+
+
+
 
 void release_velo_data(vector<velo_data_t> velo_points)
 {

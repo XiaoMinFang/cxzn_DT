@@ -1,5 +1,5 @@
-#ifndef LOAD_DATA_HPP
-#define LOAD_DATA_HPP
+#ifndef LOAD_LIDAR_DATA_HPP
+#define LOAD_LIDAR_DATA_HPP
 
 #include<iostream>
 #include<fstream>
@@ -65,6 +65,9 @@ struct imu_data_t{
     double direction;
     //imu_origin_t(){};
 };
+
+
+void process_single(pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_velo,velo_data_t velo_points);
 
 
 pcl::PointCloud<pcl::PointXYZI>::Ptr process_merged(std::vector<velo_data_t> velo_points,std::vector<imu_data_t> imu_data);

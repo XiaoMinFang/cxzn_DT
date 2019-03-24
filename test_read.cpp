@@ -7,7 +7,7 @@
 
 #include <opencv2/opencv.hpp>            // C++
 
-#include"load_data.hpp"
+#include"load_lidar_data.hpp"
 
 using namespace std;
 using namespace cv;
@@ -441,13 +441,80 @@ int copy_labelfile_main()
     string dst_f = "/home/kid/min/3.txt";
     copy_labelfile(src_f,dst_f);
 }
+int generate_img_main()
+{
+    Mat img;
+    velo_data_t velo_point;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_velo(new pcl::PointCloud<pcl::PointXYZI>);
 
-int main()
+    ifstream fin160("/home/kid/min/Annotations/LiDar/anno3/vlp160.txt", ios::in);
+    ifstream fin161("/home/kid/min/Annotations/LiDar/anno3/vlp161.txt", ios::in);
+    string velo_path_160,velo_path_161;
+    string pre_velo_path_160,pre_velo_path_161;
+
+    string label_path_old;
+    string label_path_new;
+	string imu_path;
+	int counts=0;
+	string save_path;
+
+
+    vector<velo_data_t> velo_points;
+    vector<imu_data_t> imu_datas;
+
+
+
+	clock_t startTime,endTime;
+	double merg_t=0,getimg_t=0;
+	int c=0;
+	bool is_1st = true;
+    //for(int i = 0;i<6;i++)
+    while(!fin160.eof() && !fin161.eof())
+    {
+        //同一个文件夹下的文件才可以叠加
+        getline(fin160,velo_path_160);
+        //cout<<velo_path_160<<endl;
+        getline(fin161,velo_path_161);
+        //cout<<velo_path_161<<endl;
+        velo_point = read_velo_data(velo_path_160,velo_path_161);
+
+        process_single(point_cloud_velo,velo_point);
+        get_img(img,point_cloud_velo);
+
+//        imshow("img",img);
+//        waitKey(0);
+
+        save_path = replace_all(velo_path_161,"veloseq","img_cpp_3");
+        save_path = replace_all(save_path,"VLP161/","");
+        save_path = replace_all(save_path,".bin",".png");
+        cout<<"save_path>>>"<<save_path<<endl;
+        imwrite(save_path,img);
+
+
+        label_path_old  = replace_all(velo_path_161,"img_cpp_3","labels");
+        label_path_old  = replace_all(label_path_old,"VLP161/","");
+        label_path_old  = replace_all(label_path_old,".bin",".txt");
+        cout<<"new>>>>"<<label_path_old<<endl;
+
+        label_path_new  = replace_all(save_path,".png",".txt");
+        cout<<"new>>>>"<<label_path_new<<endl;
+
+        copy_labelfile(label_path_old,label_path_new);
+
+
+
+    }
+}
+
+
+int read_test_main()
 {
     Mat img;
     ifstream fin160("/home/kid/min/Annotations/LiDar/anno2/vlp160.txt", ios::in);
     ifstream fin161("/home/kid/min/Annotations/LiDar/anno2/vlp161.txt", ios::in);
     string velo_path_160,velo_path_161;
+    string pre_velo_path_160,pre_velo_path_161;
+
     string label_path_old;
     string label_path_new;
 	string imu_path;
@@ -464,18 +531,33 @@ int main()
 	clock_t startTime,endTime;
 	double merg_t=0,getimg_t=0;
 	int c=0;
+	bool is_1st = true;
     //for(int i = 0;i<6;i++)
     while(!fin160.eof() && !fin161.eof())
     {
+        //同一个文件夹下的文件才可以叠加
         getline(fin160,velo_path_160);
         cout<<velo_path_160<<endl;
         getline(fin161,velo_path_161);
         cout<<velo_path_161<<endl;
         if (velo_path_160 =="" && velo_path_161 == "")
             break;
+        if (is_1st) {pre_velo_path_160 = velo_path_160.substr(46,2);pre_velo_path_161 = velo_path_161.substr(46,2);is_1st = false;}
+        cout<<pre_velo_path_160<<"-----"<<pre_velo_path_161<<endl;
+        if (velo_path_160.substr(46,2) != pre_velo_path_160)
+        {
+            velo_points.clear();
+            imu_datas.clear();
+            pre_velo_path_160 = velo_path_160.substr(46,2);
+            pre_velo_path_161 = velo_path_161.substr(46,2);
+            continue;
+        }
 
         velo_point = read_velo_data(velo_path_160,velo_path_161);
         velo_points.push_back(velo_point);
+
+        pre_velo_path_160 = velo_path_160.substr(46,2);
+        pre_velo_path_161 = velo_path_161.substr(46,2);
 
         imu_path = replace_all(velo_path_161,"veloseq","imuseq");
         imu_path = replace_all(imu_path,"VLP161/","");

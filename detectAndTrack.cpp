@@ -22,7 +22,7 @@
 #include <opencv2/tracking/tracking.hpp>
 #include <opencv2/videoio/videoio.hpp>
 
-#include "load_data.hpp"
+#include "load_lidar_data.hpp"
 #include "cxzn_tracking.hpp"
 
 
@@ -77,6 +77,27 @@ void draw_boxes(Mat img, Rect2d box,Scalar color,string text)
 	putText(img, text, Point2f(box.x, box.y - 10), FONT_HERSHEY_COMPLEX_SMALL, 1.2, color, 1);
 
 }
+
+void draw_tracking_res(Mat img,vector<res_track_t> res_track,Scalar color,string text)
+{
+    for(int i = 0;i<MAX_TRACKING_NUM;i++)
+    {
+        Rect2d b = res_track[i].cur_rect;
+        if (b.width != 0)
+        {
+            rectangle(img, b, color, 1);
+            Size const text_size = getTextSize(text, FONT_HERSHEY_COMPLEX_SMALL, 1.2, 2, 0);
+            int const max_width = (text_size.width > b.width + 2) ? text_size.width : (b.width + 2);
+            /*rectangle(img, Point2f(max((int)box.x - 1, 0), max((int)box.y - 30, 0)),
+                Point2f(min((int)box.x + max_width, img.cols - 1), min((int)box.y, img.rows - 1)),color, CV_FILLED, 8, 0);*/
+            putText(img, text, Point2f(b.x, b.y - 10), FONT_HERSHEY_COMPLEX_SMALL, 1.2, color, 1);
+        }
+
+    }
+
+}
+
+
 void draw_detect_boxes(Mat mat_img, vector<bbox_t> result_vec, vector<string> obj_names,
 	int current_det_fps = -1, int current_cap_fps = -1)
 {
@@ -112,7 +133,7 @@ vector<string> get_objNames_fromFile(string const filename) {
 }
 
 
-int video_main()
+int vedio_main()
 {
 	int n_interval = 10;//间隔几帧，进行检测，更新tracking结果
 
@@ -129,6 +150,7 @@ int video_main()
 
 	//Mat mat_img = imread(filename);
 	Mat mat_img;
+	Mat show_img;
 	VideoWriter writer;
 	VideoCapture cap(filename);
 
@@ -142,7 +164,8 @@ int video_main()
     }
 
     vector<track_t> tracking;
-    //Ptr<TrackerMOSSE> tracking_test;
+//    Ptr<TrackerMOSSE> tracking_test;
+//    tracking_test = TrackerMOSSE::create();
     Rect2d rect_obj;
     vector<bbox_t> obj_result_vec;
     vector<res_track_t> res_trcking;
@@ -150,60 +173,155 @@ int video_main()
     int n_tracks=0;
     bool first_frame = true;
     int count = 0;
+    float max_iou =-1;
+    int max_iou_obj_id = 0;
     while (1){
         cap >> mat_img;
+        show_img = mat_img.clone();
         count++;
         if (mat_img.rows == 0 || mat_img.cols == 0)
             break;
         if (first_frame)
         {
             obj_result_vec = detector.detect(mat_img);
-            draw_detect_boxes(mat_img, obj_result_vec, obj_names);
+            //draw_detect_boxes(show_img, obj_result_vec, obj_names);
             n_tracks = obj_result_vec.size();
             if (n_tracks < 1) continue; //没有检测到目标就再来一帧
             //初始化track
-            init_tracking(tracking,obj_result_vec, mat_img);
-            init_res_tracking(res_trcking,obj_result_vec);
+//            init_tracking(tracking,obj_result_vec, mat_img);
+//            init_res_tracking(res_trcking,obj_result_vec);
+////////////////////////////////////////////////////////////////
+//            Rect2d rect_obj;
+//            rect_obj.height = obj_result_vec[0].h; rect_obj.width = obj_result_vec[0].w;
+//			rect_obj.x = obj_result_vec[0].x; rect_obj.y = obj_result_vec[0].y;
+//            tracking_test->init(mat_img,rect_obj);
+
+            tracking = init_tracking(obj_result_vec, mat_img,n_tracks);
+            res_trcking = init_res_tracking(obj_result_vec,n_tracks);
 
             first_frame = false;
         }
         else
         {
-            obj_result_vec = detector.detect(mat_img);
-            draw_detect_boxes(mat_img, obj_result_vec, obj_names);
+            //update_tracking(tracking,res_trcking,mat_img,n_tracks); //更新
+            for (int i = 0; i < MAX_TRACKING_NUM; i++)
+            {
+                if(tracking[i].is_acti)
+                {
+                    Rect2d track_res;
+                    tracking[i].tracker->update(mat_img, track_res);
+                    if (track_res.x == 0 & track_res.y==0 & track_res.width == 0 & track_res.height == 0)
+                    {
+                        cout<<">>>>>> no trackings\n"<<endl;
+                        //增加检测 找到与上一个跟踪框iou最大的box，作为本次的跟踪框
+                        obj_result_vec = detector.detect(mat_img);
 
-            update_tracking(tracking,res_trcking,mat_img,n_tracks); //更新
+                        if (obj_result_vec.size() < 1) //也没有检测到，就删除吧。。。。。。
+                        {
+                            cout<<"can not detected obj\n"<<endl;
+                        }else{
+                            track_res = find_max_iou(obj_result_vec,res_trcking[i].cur_rect);
+                            draw_boxes(show_img, track_res, Scalar(0, 255, 0), "track_from_detect");
+                            cout<<"detect box >> track box"<<endl;
+                            cout<<track_res.x<<","<<track_res.y<<","<<track_res.width<<","<<track_res.height<<endl;
+                        }
 
 
+                    }
 
+                    ////// 计算速度
+                    track_speed_t speed = calc_speed(track_res,res_trcking[i].cur_rect);
+                    res_trcking[i].vx = speed.vx;
+                    res_trcking[i].vy = speed.vy;
+                    res_trcking[i].direction = calc_direction(res_trcking[i].cur_rect);
+                    res_trcking[i].cur_rect = track_res;
+                    res_trcking[i].id = i;
+                    res_trcking[i].l_tracking++;
+                    //draw_boxes(show_img, track_res, Scalar(0, 255, 0), "track");
+                    /*imshow("tracking", mat_img);
+                    waitKey(1);*/
+                    //destroyAllWindows;
+                    //cvWaitKey(0);
+                    }
+            }
             if (count%n_interval == 0)
             {//重新更新跟踪结果
-                //若某跟踪框与所有的检测框的iou<0.5,就删除该跟踪框；
-                //若某检测框与所有的跟踪框的iou<0.5,就添加一个跟踪框；
-                /*imshow("detect", mat_img);
-                waitKey(1);*/
-                if (obj_result_vec.size() >= 1)
+                if (obj_result_vec.size() == 0) //若前面己经detect过的，就不用再detect一次了
                 {
-                    n_tracks = obj_result_vec.size();
-                    init_tracking(tracking,obj_result_vec, mat_img);
-                    init_res_tracking(tracking,obj_result_vec);
-                    putText(mat_img, "reset tracking", Point2f(20, 20), FONT_HERSHEY_COMPLEX_SMALL, 1.2, Scalar(255, 0, 0), 1);
-                    cout << "reset tracking\n" << endl;
+                    obj_result_vec = detector.detect(mat_img);
+                    //draw_detect_boxes(mat_img, obj_result_vec, obj_names);
                 }
-                //rectangle(mat_img, objects, Scalar(0, 255, 0), 2);
+                //若某跟踪框与所有的检测框的iou<0.5,就删除该跟踪框；
+                for (int j=0;j<MAX_TRACKING_NUM;j++)
+                {
+                    if(tracking[j].is_acti)
+                    {
+                        bool is_del = is_del_rect(obj_result_vec,res_trcking[j].cur_rect);
+                        if(is_del)
+                        {
+                            tracking[j].is_acti = false;
+                            //tracking[j].tracker = TrackerMOSSE::clear();
+                            res_trcking[j].cur_rect = zero_rect();
+                            res_trcking[j].init_rect = zero_rect();
+                            res_trcking[j].l_tracking = 0;
+                            res_trcking[j].id = -1;
+                            res_trcking[j].vx = 0;
+                            res_trcking[j].vy =0;
+                            res_trcking[j].direction = 0;
+                            res_trcking[j].is_acti = 0;
+                         }
+                    }
 
-                // ...........
+                }
+                //若某检测框与所有的跟踪框的iou<0.5,就添加一个跟踪框；
+                for (int j=0;j<obj_result_vec.size();j++)
+                {
+                    bool is_add = is_add_rect(res_trcking,obj_result_vec[j]);
+                    if(is_add)
+                    {//加在哪？？？ 找第一个l_tracking = 0
+                        Rect2d obj_rect =bboxt_2_rect(obj_result_vec[j]);
+                        int idx = find_unusing_id(tracking);//idx = -1时，说明不止MAX_TRACKING_NUM个tracks
+                        tracking[idx].id = idx;
+                        tracking[idx].init_rects = obj_rect;
+                        tracking[idx].tracker = TrackerMOSSE::create();
+                        tracking[idx].tracker->init(mat_img,obj_rect);
+                        res_trcking[idx].cur_rect = obj_rect;
+                        res_trcking[idx].init_rect = obj_rect;
+                        res_trcking[idx].id = idx;
+                        res_trcking[idx].l_tracking = 0;
+                        res_trcking[idx].vx = 0;
+                        res_trcking[idx].vy = 0;
+                        res_trcking[idx].direction = 0;
+                        res_trcking[idx].is_acti = true;
+                    }
+                }
+
+
+//                /*imshow("detect", mat_img);
+//                waitKey(1);*/
+//                if (obj_result_vec.size() >= 1)
+//                {
+//                    n_tracks = obj_result_vec.size();
+////                    init_tracking(tracking,obj_result_vec, mat_img);
+////                    init_res_tracking(res_trcking,obj_result_vec);
+//                    tracking = init_tracking(obj_result_vec, mat_img);
+//                    res_trcking = init_res_tracking(obj_result_vec);
+//                    putText(mat_img, "reset tracking", Point2f(20, 20), FONT_HERSHEY_COMPLEX_SMALL, 1.2, Scalar(255, 0, 0), 1);
+//                    cout << "reset tracking\n" << endl;
+//                }
+//                //rectangle(mat_img, objects, Scalar(0, 255, 0), 2);
 
             }
 
-
             //result_vec = detector.tracking_id(result_vec);    // comment it - if track_id is not required
-
         }
         //
-        imshow("detect", mat_img);
+        draw_tracking_res(show_img,res_trcking,Scalar(0, 255, 0),"track");
+        //draw_detect_boxes(show_img, obj_result_vec, obj_names);
+        obj_result_vec.clear();
+        imshow("res", show_img);
         waitKey(1);
-        writer << mat_img;
+        writer << show_img;
 
     }
 
@@ -212,14 +330,14 @@ int video_main()
 	return 1;
 }
 
-
-int pcl_main()
+//
+int main()
 {
-	int n_interval = 10;//间隔几帧，进行检测，更新tracking结果
+	int n_interval = 5;//间隔几帧，进行检测，更新tracking结果
 
 	string  names_file = "/home/kid/min/lidar_dl/data/names.list";
-    string  cfg_file = "/home/kid/min/detectAndtrack/lidar_1c_tiny_pcl.cfg";
-    string  weights_file = "/home/kid/min/detectAndtrack/lidar_1c_tiny_pcl_45000.weights";
+    string  cfg_file = "/home/kid/min/detectAndtrack/lidar_3c_tiny_pcl.cfg";
+    string  weights_file = "/home/kid/min/detectAndtrack/lidar_3c_tiny_pcl_52000.weights";
 	//string filename = "E:\\work_min\\data\\lidar\\lidar_data\\datas\\feature_3c_anno1\\feature_3c\\2\\1499.png";
 
 	string write_video_name = "/home/kid/min/detectAndtrack/res_track.avi";
@@ -228,101 +346,176 @@ int pcl_main()
 	Detector_YOLO detector(cfg_file, weights_file);
 	auto obj_names = get_objNames_fromFile(names_file);
 
-	string velo_path_160 = "/home/kid/min/Annotations/LiDar/anno3/veloseq/0/VLP160/";
-	string velo_path_161 = "/home/kid/min/Annotations/LiDar/anno3/veloseq/0/VLP161/";
+	ifstream fin160("/home/kid/min/Annotations/LiDar/anno3/vlp160.txt", ios::in);
+    ifstream fin161("/home/kid/min/Annotations/LiDar/anno3/vlp161.txt", ios::in);
+    string velo_path_160,velo_path_161;
 
-	int s_id = 97;int e_id = 603;
-
-	Mat mat_img;
+    Mat mat_img;Mat show_img;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_velo(new pcl::PointCloud<pcl::PointXYZI>);
 	VideoWriter writer;
-	string bin_s = ".bin";
-    string velo_160 = velo_path_160+to_string(s_id) + bin_s;
-    string velo_161 = velo_path_161+to_string(s_id) + bin_s;
-    cout<< velo_160<<","<<velo_161<<endl;
     velo_data_t velo_points;
-    velo_points = read_velo_data(velo_path_160,velo_path_161);
 
-    //get_img(mat_img,velo_points);
-    if (mat_img.rows == 0 || mat_img.cols == 0) return (0);
-    cv::imshow("img",mat_img);
-    cv::waitKey(0);
+    getline(fin160,velo_path_160);
+    getline(fin161,velo_path_161);
+    velo_points = read_velo_data(velo_path_160,velo_path_161);
+    process_single(point_cloud_velo,velo_points);
+    get_img(mat_img,point_cloud_velo);
+    writer.open("/home/kid/min/res.avi", CV_FOURCC('M', 'J', 'P', 'G'), 10, Size(480,480), true);
 
 
     vector<track_t> tracking;
-    //Ptr<TrackerMOSSE> tracking_test;
     Rect2d rect_obj;
     vector<bbox_t> obj_result_vec;
     vector<res_track_t> res_trcking;
+    vector<res_ouput_t> outputs;
     int n_tracks=0;
     bool first_frame = true;
     int count = 0;
-	for (int i=s_id;i<e_id;i++)
+    while(!fin160.eof() && !fin161.eof())
     {
-        string bin_s = ".bin";
-        string velo_160 = velo_path_160+to_string(i) + bin_s;
-        string velo_161 = velo_path_161+to_string(i) + bin_s;
+        getline(fin160,velo_path_160);
+        getline(fin161,velo_path_161);
         velo_points = read_velo_data(velo_path_160,velo_path_161);
-        //get_img(mat_img,velo_points);
-        cv::imshow("img",mat_img);
-        cv::waitKey(0);
+        pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_velo(new pcl::PointCloud<pcl::PointXYZI>);
+        process_single(point_cloud_velo,velo_points);
+        get_img(mat_img,point_cloud_velo);
+
+        if (mat_img.rows == 0 || mat_img.cols == 0) return (0);
+        show_img = mat_img.clone();
+//        cv::imshow("img",show_img);
+//        cv::waitKey(0);
 
         count++;
-        if (first_frame){
+
+        if (first_frame)
+        {
             obj_result_vec = detector.detect(mat_img);
-            draw_detect_boxes(mat_img, obj_result_vec, obj_names);
+            //draw_detect_boxes(show_img, obj_result_vec, obj_names);
             n_tracks = obj_result_vec.size();
             if (n_tracks < 1) continue; //没有检测到目标就再来一帧
             //初始化track
-            tracking = init_tracking(obj_result_vec, mat_img);
-            res_trcking = init_res_tracking(obj_result_vec);
+//            init_tracking(tracking,obj_result_vec, mat_img);
+//            init_res_tracking(res_trcking,obj_result_vec);
+////////////////////////////////////////////////////////////////
+//            Rect2d rect_obj;
+//            rect_obj.height = obj_result_vec[0].h; rect_obj.width = obj_result_vec[0].w;
+//			rect_obj.x = obj_result_vec[0].x; rect_obj.y = obj_result_vec[0].y;
+//            tracking_test->init(mat_img,rect_obj);
+
+            tracking = init_tracking(obj_result_vec, mat_img,n_tracks);
+            res_trcking = init_res_tracking(obj_result_vec,n_tracks);
+
             first_frame = false;
-        }else
+        }
+        else
         {
-            obj_result_vec = detector.detect(mat_img);
-            draw_detect_boxes(mat_img, obj_result_vec, obj_names);
-            for (int i = 0; i < n_tracks; i++)
+            //update_tracking(tracking,res_trcking,mat_img,n_tracks); //更新
+            for (int i = 0; i < MAX_TRACKING_NUM; i++)
             {
-                Rect2d track_res;
-                tracking[i].tracker->update(mat_img, track_res);
-                if (track_res.x == 0 & track_res.y==0 & track_res.width == 0 & track_res.height == 0)
+                if(tracking[i].is_acti)
                 {
-                    cout<<">>>>>> no trackings\n"<<endl;
-                }
-                res_trcking[i].res_track = track_res;
-                res_trcking[i].id = i;
-                res_trcking[i].l_tracking++;
-                draw_boxes(mat_img, track_res, Scalar(0, 255, 0), "track");
-                /*imshow("tracking", mat_img);
-                waitKey(1);*/
-                //destroyAllWindows;
-                //cvWaitKey(0);
+                    Rect2d track_res;
+                    tracking[i].tracker->update(mat_img, track_res);
+                    if (track_res.x == 0 & track_res.y==0 & track_res.width == 0 & track_res.height == 0)
+                    {
+                        cout<<">>>>>> no trackings\n"<<endl;
+                        //增加检测 找到与上一个跟踪框iou最大的box，作为本次的跟踪框
+                        obj_result_vec = detector.detect(mat_img);
+
+                        if (obj_result_vec.size() < 1) //也没有检测到，就删除吧。。。。。。
+                        {
+                            cout<<"can not detected obj\n"<<endl;
+                        }else{
+                            track_res = find_max_iou(obj_result_vec,res_trcking[i].cur_rect);
+                            //draw_boxes(show_img, track_res, Scalar(0, 255, 0), "track_from_detect");
+                            cout<<"detect box >> track box"<<endl;
+                            cout<<track_res.x<<","<<track_res.y<<","<<track_res.width<<","<<track_res.height<<endl;
+                        }
+
+
+                    }
+
+                    ////// 计算速度
+                    track_speed_t speed = calc_speed(track_res,res_trcking[i].cur_rect);
+                    res_trcking[i].vx = speed.vx;
+                    res_trcking[i].vy = speed.vy;
+                    res_trcking[i].direction = calc_direction(res_trcking[i].cur_rect);
+                    res_trcking[i].cur_rect = track_res;
+                    res_trcking[i].id = i;
+                    res_trcking[i].l_tracking++;
+                    //draw_boxes(show_img, track_res, Scalar(0, 255, 0), "track");
+                    /*imshow("tracking", mat_img);
+                    waitKey(1);*/
+                    //destroyAllWindows;
+                    //cvWaitKey(0);
+                    }
             }
             if (count%n_interval == 0)
             {//重新更新跟踪结果
-                    //若某跟踪框与所有的检测框的iou<0.5,就删除该跟踪框；
-                    //若某检测框与所有的跟踪框的iou<0.5,就添加一个跟踪框；
-                    /*imshow("detect", mat_img);
-                    waitKey(1);*/
-                    if (obj_result_vec.size() >= 1)
+                if (obj_result_vec.size() == 0) //若前面己经detect过的，就不用再detect一次了
+                {
+                    obj_result_vec = detector.detect(mat_img);
+                    //draw_detect_boxes(mat_img, obj_result_vec, obj_names);
+                }
+                //若某跟踪框与所有的检测框的iou<0.5,就删除该跟踪框；
+                for (int j=0;j<MAX_TRACKING_NUM;j++)
+                {
+                    if(tracking[j].is_acti)
                     {
-                        n_tracks = obj_result_vec.size();
-                        tracking = init_tracking(obj_result_vec, mat_img);
-                        res_trcking = init_res_tracking(obj_result_vec);
-                        putText(mat_img, "reset tracking", Point2f(20, 20), FONT_HERSHEY_COMPLEX_SMALL, 1.2, Scalar(255, 0, 0), 1);
-                        cout << "reset tracking\n" << endl;
+                        bool is_del = is_del_rect(obj_result_vec,res_trcking[j].cur_rect);
+                        if(is_del)
+                        {
+                            tracking[j].is_acti = false;
+                            //tracking[j].tracker = TrackerMOSSE::clear();
+                            res_trcking[j].cur_rect = zero_rect();
+                            res_trcking[j].init_rect = zero_rect();
+                            res_trcking[j].l_tracking = 0;
+                            res_trcking[j].id = -1;
+                            res_trcking[j].vx = 0;
+                            res_trcking[j].vy =0;
+                            res_trcking[j].direction = 0;
+                            res_trcking[j].is_acti = false;
+                         }
                     }
-                    //rectangle(mat_img, objects, Scalar(0, 255, 0), 2);
-
-                    // ...........
 
                 }
-
-            imshow("detect", mat_img);
-            waitKey(1);
-            writer << mat_img;
-
+                //若某检测框与所有的跟踪框的iou<0.5,就添加一个跟踪框；
+                for (int j=0;j<obj_result_vec.size();j++)
+                {
+                    bool is_add = is_add_rect(res_trcking,obj_result_vec[j]);
+                    if(is_add)
+                    {//加在哪？？？ 找第一个l_tracking = 0
+                        Rect2d obj_rect =bboxt_2_rect(obj_result_vec[j]);
+                        int idx = find_unusing_id(tracking);//idx = -1时，说明不止MAX_TRACKING_NUM个tracks
+                        tracking[idx].is_acti = true;
+                        tracking[idx].id = idx;
+                        tracking[idx].init_rects = obj_rect;
+                        tracking[idx].tracker = TrackerMOSSE::create();
+                        tracking[idx].tracker->init(mat_img,obj_rect);
+                        res_trcking[idx].cur_rect = obj_rect;
+                        res_trcking[idx].init_rect = obj_rect;
+                        res_trcking[idx].id = idx;
+                        res_trcking[idx].l_tracking = 0;
+                        res_trcking[idx].vx = 0;
+                        res_trcking[idx].vy = 0;
+                        res_trcking[idx].direction = 0;
+                        res_trcking[idx].is_acti = true;
+                    }
+                }
+            }
         }
+        draw_tracking_res(show_img,res_trcking,Scalar(0, 255, 0),"track");
+
+        outputs = convert_resTrack(res_trcking);
+        print_output(outputs);
+        outputs.clear();
+
+        //draw_detect_boxes(show_img, obj_result_vec, obj_names);
+        obj_result_vec.clear();
+        imshow("res", show_img);
+        waitKey(1);
+        writer << show_img;
     }
-	writer.release();
+    writer.release();
 	return 1;
 }

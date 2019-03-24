@@ -116,7 +116,8 @@ public:
 	static std::shared_ptr<image_t> mat_to_image(cv::Mat img_src)
 	{
 		cv::Mat img;
-		cv::cvtColor(img_src, img, cv::COLOR_RGB2BGR);
+		//cv::cvtColor(img_src, img, cv::COLOR_RGB2BGR);
+		img = img_src.clone();
 		std::shared_ptr<image_t> image_ptr(new image_t, [](image_t *img) { free_image(*img); delete img; });
 		std::shared_ptr<IplImage> ipl_small = std::make_shared<IplImage>(img);
 		*image_ptr = ipl_to_image(ipl_small.get());
