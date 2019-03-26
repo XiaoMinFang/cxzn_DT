@@ -89,6 +89,7 @@ float *SortArry(float *StrA,int lenA, float *StrB, int lenB)
 
 void passthrough_filter(pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_velo,bool is_gro)
 {
+    cout<<">>>>>>> passthrough_filter"<<endl;
     pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered_x(new pcl::PointCloud<pcl::PointXYZI>);
     pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered_y(new pcl::PointCloud<pcl::PointXYZI>);
     //pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered_z(new pcl::PointCloud<pcl::PointXYZI>);
@@ -427,6 +428,10 @@ void get_img(cv::Mat& img_src,pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_v
 
     //*********************
     //# 转换为像素位置的值 - 基于分辨率
+
+
+
+
     int res = 480;
     float xp = (MAXY-MINY) / (float)res;
     float yp = (MAXX-MINX) / (float)res;
@@ -443,6 +448,7 @@ void get_img(cv::Mat& img_src,pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_v
     for(int j=0;j<size_cloud;j++)
     {
         ximg[j] = (int)((point_cloud_velo->points[j].y - MINY)/ yp);
+        //yimg[j] = (int)((point_cloud_velo->points[j].x - MINX)/ xp);
         yimg[j] = res-1-(int)((point_cloud_velo->points[j].x - MINX)/ xp);
 //        px = ximg[j];
 //        py = yimg[j];
@@ -454,6 +460,7 @@ void get_img(cv::Mat& img_src,pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_v
         z_points.push_back(point_cloud_velo->points[j].z);
         intensityMap.push_back(point_cloud_velo->points[j].intensity);
     }
+
     nol_z_points = normalize_0_255(z_points,MINZ,MAXZ);
     //float d_min = *min_element(intensityMap.begin(), intensityMap.end());
     float d_max = *max_element(intensityMap.begin(), intensityMap.end());
@@ -471,11 +478,11 @@ void get_img(cv::Mat& img_src,pcl::PointCloud<pcl::PointXYZI>::Ptr point_cloud_v
     {
         px = ximg[i];
         py = yimg[i];
-        img.at<Vec3b>(py,px)[0] = nol_densityMap[i];
-        //img.at<Vec3b>(py,px)[0] = 0;
+        //img.at<Vec3b>(py,px)[0] = nol_densityMap[i];
+        img.at<Vec3b>(py,px)[0] = 0;
         img.at<Vec3b>(py,px)[1] = nol_z_points[i];
-        img.at<Vec3b>(py,px)[2] = nol_intensityMap[i];
-        //img.at<Vec3b>(py,px)[2] = 0;
+        //img.at<Vec3b>(py,px)[2] = nol_intensityMap[i];
+        img.at<Vec3b>(py,px)[2] = 0;
         //img.at<uchar>(py,px) = nol_z_points[i];
 
 

@@ -13,7 +13,7 @@
 #define PIXEL2M 0.125//8 PIXEL = 1 M
 #define SRC_POINT_X 240
 #define SRC_POINT_Y 400
-#define HALF_PI 1.5707 //PI/2
+//#define HALF_PI 1.5707 //PI/2
 
 struct track_speed_t{
     float vx;

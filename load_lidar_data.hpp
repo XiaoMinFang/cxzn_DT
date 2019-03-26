@@ -40,6 +40,12 @@
 #define MAXY 30.0
 #define MINZ -1.6
 #define MAXZ 2.4
+//#define MINX -100.0
+//#define MAXX 500.0
+//#define MINY -300.0
+//#define MAXY 300.0
+//#define MINZ -1.6
+//#define MAXZ 2.4
 
 #define GROUND_LIMIT_MIN 0.5
 #define GROUND_LIMIT_MAX 5
